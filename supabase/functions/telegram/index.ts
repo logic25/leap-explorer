@@ -347,6 +347,114 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
     });
   }
 
+  // /close TICKER — Close position and sell on Alpaca
+  if (text.startsWith("/close")) {
+    const ticker = text.split(" ")[1]?.toUpperCase();
+    if (!ticker) {
+      await sendTelegramMessage(token, chatId, "Usage: /close TICKER");
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...rHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Find open position
+    const { data: pos } = await supabase
+      .from("positions")
+      .select("*")
+      .eq("user_id", profile.id)
+      .eq("ticker", ticker)
+      .eq("status", "open")
+      .single();
+
+    if (!pos) {
+      await sendTelegramMessage(token, chatId, `❌ No open position for ${ticker}.`);
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...rHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Submit sell order to Alpaca
+    let alpacaResult = "";
+    const ALPACA_API_KEY = Deno.env.get("ALPACA_API_KEY");
+    const ALPACA_SECRET_KEY = Deno.env.get("ALPACA_SECRET_KEY");
+
+    if (ALPACA_API_KEY && ALPACA_SECRET_KEY) {
+      const mode = profile.trading_mode || "paper";
+      const alpacaBaseUrl = mode === "live"
+        ? "https://api.alpaca.markets/v2"
+        : "https://paper-api.alpaca.markets/v2";
+
+      // Build OCC symbol
+      const expiry = pos.expiry;
+      const strike = pos.strike;
+      if (expiry && strike) {
+        const expDate = new Date(expiry);
+        const yy = String(expDate.getFullYear()).slice(-2);
+        const mm = String(expDate.getMonth() + 1).padStart(2, "0");
+        const dd = String(expDate.getDate()).padStart(2, "0");
+        const strikePadded = String(Math.round(strike * 1000)).padStart(8, "0");
+        const paddedTicker = ticker.padEnd(6, " ");
+        const optionSymbol = `${paddedTicker}${yy}${mm}${dd}C${strikePadded}`;
+
+        try {
+          const sellRes = await fetch(`${alpacaBaseUrl}/orders`, {
+            method: "POST",
+            headers: {
+              "APCA-API-KEY-ID": ALPACA_API_KEY,
+              "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              symbol: optionSymbol,
+              qty: String(pos.qty),
+              side: "sell",
+              type: "market",
+              time_in_force: "day",
+            }),
+          });
+          const sellData = await sellRes.json();
+
+          if (sellRes.ok) {
+            alpacaResult = `\n🔗 Alpaca sell order: \`${sellData.status}\``;
+          } else {
+            alpacaResult = `\n⚠️ Alpaca sell failed: ${sellData.message || JSON.stringify(sellData)}`;
+          }
+        } catch (e) {
+          alpacaResult = `\n⚠️ Alpaca error: ${String(e)}`;
+        }
+      }
+    }
+
+    // Close in DB
+    await supabase
+      .from("positions")
+      .update({
+        status: "closed",
+        closed_at: new Date().toISOString(),
+        exit_price: pos.current_price || pos.avg_cost,
+        exit_reason: "manual_telegram",
+      })
+      .eq("id", pos.id);
+
+    await supabase.from("audit_log").insert({
+      user_id: profile.id,
+      action_type: "POSITION_CLOSED_TELEGRAM",
+      details: { ticker, strike: pos.strike, expiry: pos.expiry, pnl_pct: pos.pnl_pct, exit_reason: "manual_telegram" },
+    });
+
+    await sendTelegramMessage(token, chatId,
+      `🔴 *${ticker} CLOSED*\n\n` +
+      `Strike: $${pos.strike} | ${pos.expiry}\n` +
+      `P&L: ${(pos.pnl_pct || 0) >= 0 ? "+" : ""}${(pos.pnl_pct || 0).toFixed(1)}%` +
+      alpacaResult +
+      `\n\n_Position closed and logged._`
+    );
+
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: { ...rHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   // /orders — Check recent Alpaca orders
   if (text === "/orders") {
     const ALPACA_API_KEY = Deno.env.get("ALPACA_API_KEY");
@@ -396,7 +504,7 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
   }
 
   if (text === "/help") {
-    await sendTelegramMessage(token, chatId, "*LEAPS Trader Bot*\n\nCommands:\n/start — Welcome & Chat ID\n/approve TICKER — AI suggests limit price\n/confirm TICKER — Execute at AI price\n/approve TICKER 41.20 — Override price\n/reject TICKER [reason]\n/status — View positions\n/orders — Recent Alpaca orders\n/help — This message\n\nOr just ask a question in plain English!");
+    await sendTelegramMessage(token, chatId, "*LEAPS Trader Bot*\n\nCommands:\n/start — Welcome & Chat ID\n/approve TICKER — AI suggests limit price\n/confirm TICKER — Execute at AI price\n/approve TICKER 41.20 — Override price\n/reject TICKER [reason]\n/close TICKER — Close position & sell on Alpaca\n/status — View positions\n/orders — Recent Alpaca orders\n/help — This message\n\nOr just ask a question in plain English!");
   } else {
     // Forward unrecognized messages to Gemini chat AI
     try {

@@ -18,7 +18,7 @@ export function ChecklistModal({ alert, open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl bg-card border-border max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl bg-card border-border max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <span className="font-mono text-lg">{alert.ticker}</span>
@@ -48,20 +48,22 @@ export function ChecklistModal({ alert, open, onClose }: Props) {
           <TradingViewChart ticker={alert.ticker} />
 
           {/* Checklist */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Entry Checklist</h4>
-            {alert.checklist.map((item, i) => (
-              <div key={i} className="flex items-center gap-2.5 text-sm py-1">
-                {item.passed ? (
-                  <Check className="h-4 w-4 text-bullish shrink-0" />
-                ) : (
-                  <X className="h-4 w-4 text-bearish shrink-0" />
-                )}
-                <span className={item.passed ? 'text-foreground' : 'text-muted-foreground'}>
-                  {item.label}
-                </span>
-              </div>
-            ))}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+              {alert.checklist.map((item, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs py-0.5">
+                  {item.passed ? (
+                    <Check className="h-3.5 w-3.5 text-bullish shrink-0" />
+                  ) : (
+                    <X className="h-3.5 w-3.5 text-bearish shrink-0" />
+                  )}
+                  <span className={item.passed ? 'text-foreground' : 'text-muted-foreground'}>
+                    {item.label}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

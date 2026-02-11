@@ -1,0 +1,1 @@
+ALTER TABLE public.scanner_alerts DROP CONSTRAINT scanner_alerts_scanner_type_check;

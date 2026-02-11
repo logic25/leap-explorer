@@ -18,12 +18,20 @@ export interface ScannerAlert {
   suggestedStrike: number;
   suggestedExpiry: string;
   delta: number;
+  theta: number;
+  vega: number;
   dte: number;
   openInterest: number;
   bidAskSpread: number;
   ivPercentile: number;
+  ivRank?: number;
+  ivHvRatio?: number;
   askPrice: number;
   historicalLow: number;
+  volumeOiRatio?: number;
+  unusualActivity?: boolean;
+  slippageEst?: number;
+  chainQualityScore?: number;
   checklist: ChecklistItem[];
   timestamp: string;
 }
@@ -31,6 +39,7 @@ export interface ScannerAlert {
 export interface ChecklistItem {
   label: string;
   passed: boolean;
+  category?: string;
 }
 
 export interface Position {
@@ -64,18 +73,26 @@ export const mockRegime: { status: RegimeStatus; spyAbove50: boolean; spyAbove20
 };
 
 const checklist = (type: ScannerType): ChecklistItem[] => [
-  { label: 'Scanner Confirmation', passed: true },
-  { label: 'Weekly Chart: Above 200 MA / Clean Uptrend', passed: true },
-  { label: 'Weekly Chart: 1-2 ATR Pullback', passed: type !== 'MegaRun' },
-  { label: `Option Chain: Delta ${type === 'Fallen Angel' ? '0.40-0.55' : '0.50-0.65'}`, passed: true },
-  { label: 'Option Chain: DTE 700-900+', passed: true },
-  { label: 'Option Chain: OI > 500', passed: true },
-  { label: 'Option Chain: Bid-Ask < 2-5%', passed: true },
-  { label: 'Option Chain: IV Term Structure', passed: type !== 'Fallen Angel' },
-  { label: 'Option Chain: IV Percentile < 50th', passed: true },
-  { label: 'Portfolio: Size 2-4% / Total < 25%', passed: true },
-  { label: 'No Earnings in 2 Weeks', passed: true },
-  { label: 'Thesis Understood', passed: false },
+  { label: 'Scanner Confirmation', passed: true, category: 'scanner' },
+  { label: 'Weekly Chart: Above 200 MA / Clean Uptrend', passed: true, category: 'scanner' },
+  { label: 'Weekly Chart: 1-2 ATR Pullback', passed: type !== 'MegaRun', category: 'scanner' },
+  { label: `Delta ${type === 'Fallen Angel' ? '0.40-0.55' : '0.50-0.65'}`, passed: true, category: 'greeks' },
+  { label: 'DTE 700-900+', passed: true, category: 'greeks' },
+  { label: 'Theta < -$0.05/day', passed: true, category: 'greeks' },
+  { label: 'OI > 1,000 (liquid)', passed: true, category: 'liquidity' },
+  { label: 'OI > 500 (minimum)', passed: true, category: 'liquidity' },
+  { label: 'Bid-Ask Spread < 5%', passed: true, category: 'spread' },
+  { label: 'Bid-Ask Spread < 2% (ideal)', passed: true, category: 'spread' },
+  { label: 'Est. Slippage < $0.50', passed: true, category: 'spread' },
+  { label: 'IV Percentile < 50th', passed: true, category: 'iv' },
+  { label: 'IV Rank < 50', passed: true, category: 'iv' },
+  { label: 'IV/HV Ratio < 1.3', passed: type !== 'Fallen Angel', category: 'iv' },
+  { label: 'Options Volume > 0', passed: true, category: 'volume' },
+  { label: 'Volume/OI Ratio < 3', passed: true, category: 'volume' },
+  { label: 'Chain Quality Score > 50', passed: true, category: 'quality' },
+  { label: 'Portfolio: Size 2-4% / Total < 25%', passed: true, category: 'portfolio' },
+  { label: 'No Earnings in 2 Weeks', passed: true, category: 'portfolio' },
+  { label: 'Thesis Understood', passed: false, category: 'portfolio' },
 ];
 
 export const mockAlerts: ScannerAlert[] = [
@@ -83,27 +100,30 @@ export const mockAlerts: ScannerAlert[] = [
     id: '1', ticker: 'NVDA', name: 'NVIDIA Corp', scannerType: 'Value Zone',
     price: 142.50, change: 3.20, changePct: 2.3, ma50: 138.00, ma200: 130.50,
     rsi: 42, volume: 58_200_000, avgVolume: 48_500_000,
-    suggestedStrike: 140, suggestedExpiry: 'Jan 2028', delta: 0.58, dte: 780,
-    openInterest: 12400, bidAskSpread: 1.2, ivPercentile: 38,
-    askPrice: 42.50, historicalLow: 35.80,
+    suggestedStrike: 140, suggestedExpiry: 'Jan 2028', delta: 0.58, theta: -0.03, vega: 0.45, dte: 780,
+    openInterest: 12400, bidAskSpread: 1.2, ivPercentile: 38, ivRank: 35, ivHvRatio: 0.95,
+    askPrice: 42.50, historicalLow: 35.80, volumeOiRatio: 0.8, unusualActivity: false,
+    slippageEst: 0.21, chainQualityScore: 82,
     checklist: checklist('Value Zone'), timestamp: new Date().toISOString(),
   },
   {
     id: '2', ticker: 'AVGO', name: 'Broadcom Inc', scannerType: 'MegaRun',
     price: 185.30, change: 5.10, changePct: 2.83, ma50: 178.00, ma200: 165.20,
     rsi: 62, volume: 22_100_000, avgVolume: 18_400_000,
-    suggestedStrike: 180, suggestedExpiry: 'Jan 2028', delta: 0.61, dte: 810,
-    openInterest: 8900, bidAskSpread: 1.8, ivPercentile: 44,
-    askPrice: 38.20, historicalLow: 31.50,
+    suggestedStrike: 180, suggestedExpiry: 'Jan 2028', delta: 0.61, theta: -0.04, vega: 0.52, dte: 810,
+    openInterest: 8900, bidAskSpread: 1.8, ivPercentile: 44, ivRank: 42, ivHvRatio: 1.05,
+    askPrice: 38.20, historicalLow: 31.50, volumeOiRatio: 1.2, unusualActivity: false,
+    slippageEst: 0.34, chainQualityScore: 71,
     checklist: checklist('MegaRun'), timestamp: new Date().toISOString(),
   },
   {
     id: '3', ticker: 'CRWD', name: 'CrowdStrike', scannerType: 'Fallen Angel',
     price: 198.40, change: -2.80, changePct: -1.39, ma50: 210.00, ma200: 245.00,
     rsi: 35, volume: 9_800_000, avgVolume: 7_200_000,
-    suggestedStrike: 200, suggestedExpiry: 'Jan 2028', delta: 0.48, dte: 750,
-    openInterest: 5600, bidAskSpread: 2.1, ivPercentile: 32,
-    askPrice: 28.90, historicalLow: 22.40,
+    suggestedStrike: 200, suggestedExpiry: 'Jan 2028', delta: 0.48, theta: -0.02, vega: 0.38, dte: 750,
+    openInterest: 5600, bidAskSpread: 2.1, ivPercentile: 32, ivRank: 28, ivHvRatio: 1.35,
+    askPrice: 28.90, historicalLow: 22.40, volumeOiRatio: 0.5, unusualActivity: false,
+    slippageEst: 0.30, chainQualityScore: 58,
     checklist: checklist('Fallen Angel'), timestamp: new Date().toISOString(),
   },
 ];

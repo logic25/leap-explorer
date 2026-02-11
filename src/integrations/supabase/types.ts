@@ -89,11 +89,13 @@ export type Database = {
           strike: number
           suggestion: string | null
           suggestion_type: string | null
+          theta: number | null
           ticker: string
           trailing_active: boolean
           trailing_stop_pct: number | null
           updated_at: string
           user_id: string
+          vega: number | null
         }
         Insert: {
           allocation?: number | null
@@ -121,11 +123,13 @@ export type Database = {
           strike: number
           suggestion?: string | null
           suggestion_type?: string | null
+          theta?: number | null
           ticker: string
           trailing_active?: boolean
           trailing_stop_pct?: number | null
           updated_at?: string
           user_id: string
+          vega?: number | null
         }
         Update: {
           allocation?: number | null
@@ -153,11 +157,13 @@ export type Database = {
           strike?: number
           suggestion?: string | null
           suggestion_type?: string | null
+          theta?: number | null
           ticker?: string
           trailing_active?: boolean
           trailing_stop_pct?: number | null
           updated_at?: string
           user_id?: string
+          vega?: number | null
         }
         Relationships: [
           {
@@ -208,6 +214,7 @@ export type Database = {
           ask_price: number | null
           avg_volume: number | null
           bid_ask_spread: number | null
+          chain_quality_score: number | null
           change_pct: number | null
           checklist: Json
           confluence_score: string | null
@@ -225,17 +232,23 @@ export type Database = {
           rsi: number | null
           scan_date: string
           scanner_type: string
+          slippage_est: number | null
           suggested_expiry: string | null
           suggested_strike: number | null
+          theta: number | null
           ticker: string
+          unusual_activity: boolean | null
           user_id: string
+          vega: number | null
           volume: number | null
+          volume_oi_ratio: number | null
         }
         Insert: {
           all_passed?: boolean
           ask_price?: number | null
           avg_volume?: number | null
           bid_ask_spread?: number | null
+          chain_quality_score?: number | null
           change_pct?: number | null
           checklist?: Json
           confluence_score?: string | null
@@ -253,17 +266,23 @@ export type Database = {
           rsi?: number | null
           scan_date?: string
           scanner_type: string
+          slippage_est?: number | null
           suggested_expiry?: string | null
           suggested_strike?: number | null
+          theta?: number | null
           ticker: string
+          unusual_activity?: boolean | null
           user_id: string
+          vega?: number | null
           volume?: number | null
+          volume_oi_ratio?: number | null
         }
         Update: {
           all_passed?: boolean
           ask_price?: number | null
           avg_volume?: number | null
           bid_ask_spread?: number | null
+          chain_quality_score?: number | null
           change_pct?: number | null
           checklist?: Json
           confluence_score?: string | null
@@ -281,11 +300,16 @@ export type Database = {
           rsi?: number | null
           scan_date?: string
           scanner_type?: string
+          slippage_est?: number | null
           suggested_expiry?: string | null
           suggested_strike?: number | null
+          theta?: number | null
           ticker?: string
+          unusual_activity?: boolean | null
           user_id?: string
+          vega?: number | null
           volume?: number | null
+          volume_oi_ratio?: number | null
         }
         Relationships: []
       }

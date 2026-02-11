@@ -42,6 +42,40 @@ const METRIC_TOOLTIPS: Record<string, string> = {
   Quality: 'Chain Quality Score (0-100): OI 40%, Volume 30%, Spread 30%. Green >80.',
 };
 
+const CHECKLIST_TOOLTIPS: Record<string, string> = {
+  // Scanner
+  'Price above 200-day SMA': 'Long-term trend confirmation. Price above SMA200 indicates bullish momentum.',
+  'Price above 50-day SMA': 'Medium-term trend support. Price above SMA50 confirms intermediate uptrend.',
+  'RSI between 30-70': 'Relative Strength Index in neutral zone. Avoids overbought (>70) or oversold (<30) entries.',
+  'Volume above average': 'Trading volume exceeds the 50-day average, confirming institutional interest.',
+  'RSI below 45': 'RSI below 45 suggests the stock is in a value zone, not yet overbought.',
+  'Price near 50-day SMA': 'Price within 3% of SMA50 — potential support/bounce zone.',
+  'Positive daily change': 'Stock closed higher today, showing buying pressure.',
+  // Greeks
+  'Delta 0.40-0.65': 'Target delta range for LEAPS. Provides good leverage with manageable risk.',
+  'Delta in range': 'Option delta falls within the acceptable target range for the strategy.',
+  'Theta > -0.05': 'Daily time decay is less than $5/contract/day — manageable for long-dated options.',
+  'Vega < 0.50': 'IV sensitivity is contained. Large vega means big P&L swings from IV changes.',
+  // Liquidity
+  'Open Interest > 500': 'Minimum OI threshold for acceptable liquidity. Higher = easier to fill.',
+  'Open Interest > 1000': 'Strong OI ensures tight fills and easy exit when needed.',
+  // Spread
+  'Bid-Ask Spread < 10%': 'Spread under 10% of mid-price. Tighter = less slippage on entry/exit.',
+  'Bid-Ask Spread < 5%': 'Tight spread indicates strong market maker presence and low transaction costs.',
+  // IV
+  'IV Percentile < 80%': 'IV is not at extreme highs — you\'re not overpaying for volatility.',
+  'IV/HV Ratio < 1.5': 'Implied vol is not excessively above realized vol — fair option pricing.',
+  // Volume
+  'Option Volume > 0': 'At least some trading activity today — contract is not completely stale.',
+  'Option Volume > 100': 'Decent daily volume ensures the contract is actively traded.',
+  // Quality
+  'Chain Quality > 30': 'Composite score above 30 indicates minimum acceptable chain quality.',
+  'Chain Quality > 50': 'Good overall chain quality — OI, volume, and spread all adequate.',
+  // Portfolio
+  'Position size within limits': 'Trade size respects your configured position sizing rules.',
+  'Portfolio allocation available': 'Adding this position won\'t exceed your max allocation limit.',
+};
+
 export function ChecklistModal({ alert, open, onClose }: Props) {
   const [checklistOpen, setChecklistOpen] = useState(true);
   if (!alert) return null;
@@ -163,34 +197,51 @@ export function ChecklistModal({ alert, open, onClose }: Props) {
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="space-y-3 pt-1 pb-2">
-                {Object.entries(grouped).map(([category, items]) => {
-                  const catInfo = CATEGORY_LABELS[category] || { label: category, icon: '•' };
-                  const catPassed = items.filter(i => i.passed).length;
-                  const catAll = catPassed === items.length;
-                  return (
-                    <div key={category}>
-                      <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${catAll ? 'text-bullish' : 'text-muted-foreground'}`}>
-                        {catInfo.icon} {catInfo.label} ({catPassed}/{items.length})
+              <TooltipProvider delayDuration={200}>
+                <div className="space-y-4 pt-2 pb-2">
+                  {Object.entries(grouped).map(([category, items]) => {
+                    const catInfo = CATEGORY_LABELS[category] || { label: category, icon: '•' };
+                    const catPassed = items.filter(i => i.passed).length;
+                    const catAll = catPassed === items.length;
+                    return (
+                      <div key={category} className="space-y-1.5">
+                        <div className={`text-[11px] font-semibold uppercase tracking-wider ${catAll ? 'text-bullish' : 'text-muted-foreground'}`}>
+                          {catInfo.icon} {catInfo.label} ({catPassed}/{items.length})
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+                          {items.map((item, i) => {
+                            const tooltipText = CHECKLIST_TOOLTIPS[item.label] || `${item.label}: ${item.passed ? 'Condition met' : 'Condition not met'}`;
+                            return (
+                              <Tooltip key={i}>
+                                <TooltipTrigger asChild>
+                                  <div className={`flex items-center gap-2.5 text-xs py-1 px-2 rounded-md cursor-help transition-colors ${
+                                    item.passed 
+                                      ? 'bg-bullish/5 hover:bg-bullish/10' 
+                                      : 'bg-bearish/5 hover:bg-bearish/10'
+                                  }`}>
+                                    {item.passed ? (
+                                      <Check className="h-3.5 w-3.5 text-bullish shrink-0" />
+                                    ) : (
+                                      <X className="h-3.5 w-3.5 text-bearish shrink-0" />
+                                    )}
+                                    <span className={`leading-snug ${item.passed ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                      {item.label}
+                                    </span>
+                                    <Info className="h-3 w-3 text-muted-foreground/50 shrink-0 ml-auto" />
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                  {tooltipText}
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5">
-                        {items.map((item, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs py-0.5">
-                            {item.passed ? (
-                              <Check className="h-3.5 w-3.5 text-bullish shrink-0" />
-                            ) : (
-                              <X className="h-3.5 w-3.5 text-bearish shrink-0" />
-                            )}
-                            <span className={item.passed ? 'text-foreground' : 'text-muted-foreground'}>
-                              {item.label}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              </TooltipProvider>
             </CollapsibleContent>
           </Collapsible>
         </div>

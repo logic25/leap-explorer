@@ -209,13 +209,16 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
 
     // Find today's alert
     const today = new Date().toISOString().split("T")[0];
-    const { data: alert } = await supabase
+    const { data: alerts } = await supabase
       .from("scanner_alerts")
       .select("*")
       .eq("user_id", profile.id)
       .eq("ticker", ticker)
       .eq("scan_date", today)
-      .single();
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const alert = alerts?.[0];
 
     if (!alert) {
       await sendTelegramMessage(token, chatId, `❌ No alert found for ${ticker} today.`);
@@ -245,13 +248,16 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
     }
 
     const today = new Date().toISOString().split("T")[0];
-    const { data: alert } = await supabase
+    const { data: alerts } = await supabase
       .from("scanner_alerts")
       .select("*")
       .eq("user_id", profile.id)
       .eq("ticker", ticker)
       .eq("scan_date", today)
-      .single();
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const alert = alerts?.[0];
 
     if (!alert) {
       await sendTelegramMessage(token, chatId, `❌ No alert found for ${ticker} today.`);
@@ -307,13 +313,16 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
       await sendTelegramMessage(token, chatId, "Usage: /reject TICKER [reason]");
     } else {
       const today = new Date().toISOString().split("T")[0];
-      const { data: alert } = await supabase
+      const { data: alerts } = await supabase
         .from("scanner_alerts")
         .select("*")
         .eq("user_id", profile.id)
         .eq("ticker", ticker)
         .eq("scan_date", today)
-        .single();
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const alert = alerts?.[0];
 
       await supabase.from("audit_log").insert({
         user_id: profile.id,

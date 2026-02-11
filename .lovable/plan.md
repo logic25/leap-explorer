@@ -1,79 +1,75 @@
 
+## Plan: Stop Loss, Trailing Stop, and Win Rate Stats
 
-## Plan: Editable Watchlist, Strategy Playbook, Telegram Test, and AI Price Suggestions
+### What's Missing Today
 
-This plan covers four interconnected features that transform your Settings page into a full strategy configuration hub and enhance the trade execution flow.
-
----
-
-### 1. Editable Watchlist (Settings Page)
-
-Replace the static stock list display with an interactive watchlist manager:
-
-- **Add/remove tickers** with an input field and delete buttons
-- **Persist to database** -- the `profiles.stock_watchlist` column (jsonb) already exists and stores your tickers
-- **Sync on save** so the scanner uses your updated list
-- Remove the hardcoded `STOCK_LIST` from `mock-data.ts` in favor of reading from the database
+The `positions` table only tracks open positions with basic P&L. There are no columns for:
+- Stop loss price or percentage
+- Trailing stop logic (move SL up after hitting profit target)
+- Closed trade history (exit price, exit date, outcome)
+- Win/loss statistics
 
 ---
 
-### 2. Natural Language Strategy Playbook
+### 1. Database Changes
 
-Add a new "Strategy Playbook" section to Settings where you can describe your strategies in plain English and the AI interprets them into scanner conditions:
+Add new columns to the `positions` table:
 
-- **Strategy cards** for each scanner type (Value Zone, Fallen Angel, MegaRun) with a text area for your thesis/conditions in natural language
-- **AI parsing**: When you save, the system sends your natural language description to the AI (via the existing chat edge function) to extract structured conditions (RSI thresholds, MA relationships, volume ratios, etc.)
-- **Stored in a new `strategies` table** with columns: `id`, `user_id`, `name`, `scanner_type`, `description` (your natural language text), `conditions` (jsonb -- the parsed rules), `enabled` (boolean)
-- The `scan-watchlist` function will read from this table instead of using hardcoded `detectScannerType` logic, allowing your custom playbooks to drive the scanner
-
----
-
-### 3. Telegram Bot Test Flow
-
-To test the full alert-to-approval cycle:
-
-- **Create a "Send Test Alert" button** in Settings (Telegram section) that triggers `scan-watchlist` for just 1-2 tickers (e.g., NVDA, MSFT) against your linked Telegram
-- This fires the existing flow: scan -> insert alert -> send Telegram notification -> you reply `/approve TICKER` -> position created -> fill confirmation sent back
-- **Fix the webhook**: Ensure the Telegram webhook is registered (call `setup_webhook` action) so replies from your Telegram are routed back to the bot
+- `stop_loss_pct` (numeric) -- initial stop loss percentage (e.g., -35 means exit at 35% loss)
+- `trailing_stop_pct` (numeric, nullable) -- trailing stop % once profit target is hit
+- `profit_target_pct` (numeric, nullable) -- the profit % threshold that activates the trailing stop
+- `trailing_active` (boolean, default false) -- whether trailing stop has been activated
+- `highest_pnl_pct` (numeric, nullable) -- tracks the high-water mark for trailing stop calc
+- `exit_price` (numeric, nullable) -- filled when position is closed
+- `closed_at` (timestamptz, nullable) -- when the position was closed
+- `exit_reason` (text, nullable) -- "stop_loss", "trailing_stop", "manual", "roll", etc.
 
 ---
 
-### 4. AI-Suggested Limit Order Price
+### 2. Portfolio Page Enhancements
 
-Enhance the `/approve` flow so the AI suggests an optimal limit price before execution:
+**New summary cards:**
+- **Win Rate** -- calculated from closed positions (where `status = 'closed'` and `pnl > 0`)
+- **Avg Win / Avg Loss** -- average P&L % of winners vs losers
+- **Total Closed** -- number of completed trades
 
-- When you `/approve TICKER`, before executing, the bot calls the AI with context: current ask, bid, historical low for the option, IV percentile, and scanner type
-- The AI suggests a limit price (e.g., "Suggest $41.20 -- 3% below ask, near 30-day VWAP") with reasoning
-- The bot sends this as a confirmation: "AI suggests limit at $41.20. Reply `/confirm TICKER` to execute or `/approve TICKER [price]` to override"
-- Adds a two-step flow: `/approve` -> AI suggestion -> `/confirm` or `/approve TICKER 41.20`
+**Per-position stop loss display:**
+- Show the current SL level in the table (new column)
+- Color-code: red if price is near SL, green if trailing stop is active
+- Show a small indicator when trailing stop has been activated (e.g., lock icon)
+
+**Editable stop loss per position:**
+- Click a position's SL cell to edit stop loss % and trailing stop settings
+- Popover or inline edit with fields: Initial SL %, Profit Target %, Trailing Stop %
+
+**Closed positions tab:**
+- Add a toggle or tab to view closed/historical trades with exit reason and outcome
 
 ---
 
-### Technical Details
+### 3. Stop Loss Logic
 
-**New database table:**
-```
-strategies:
-  - id (uuid, PK)
-  - user_id (uuid, references profiles.id)
-  - name (text) -- e.g. "Value Zone"
-  - scanner_type (text)
-  - description (text) -- natural language rules
-  - conditions (jsonb) -- AI-parsed structured conditions
-  - enabled (boolean, default true)
-  - created_at, updated_at (timestamptz)
-```
+Based on your strategy rules (from project memory):
+- Default initial stop loss: **-35%** (configurable per position)
+- Trailing stop activates at a configurable profit target (e.g., +50%)
+- Once active, trailing stop trails at a set % below the high-water mark (e.g., -20% from peak)
+- The `suggestion` field already flags positions -- this will now also flag when a position is near its stop loss
 
-RLS: Users can only read/write their own strategies.
+---
 
-**Files to create/modify:**
-- `src/pages/Settings.tsx` -- Add editable watchlist UI + strategy playbook sections + test alert button
-- `supabase/functions/scan-watchlist/index.ts` -- Read strategies from DB instead of hardcoded detection
-- `supabase/functions/telegram/index.ts` -- Add AI price suggestion step with `/confirm` command
-- New migration for `strategies` table
+### 4. Technical Details
 
-**Edge function changes (telegram):**
-- Add `/confirm TICKER` command handler
-- Store pending approvals temporarily (in `scanner_alerts` with a `pending_approval` flag or a new `pending_trades` table)
-- Call AI gateway for price suggestion using alert context data
+**Migration SQL** adds the new columns to `positions` with sensible defaults (stop_loss_pct defaults to -35).
 
+**Portfolio.tsx changes:**
+- Fetch both open and closed positions (two queries or filter client-side)
+- Compute win rate, avg win, avg loss from closed positions
+- Add SL column to the table with inline edit (popover with slider for SL %, profit target, trailing %)
+- Add "Closed Trades" section below open positions
+- Show trailing stop status with visual indicator
+
+**Files to modify:**
+- `src/pages/Portfolio.tsx` -- major UI additions (stats cards, SL column, closed trades section, inline SL editor)
+- Database migration -- add columns to `positions`
+
+**No edge function changes needed** -- the stop loss monitoring/alerting can be added later as a scheduled function. This plan focuses on the UI and data model first.

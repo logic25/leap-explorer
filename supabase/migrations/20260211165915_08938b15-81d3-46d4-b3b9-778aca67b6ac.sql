@@ -1,0 +1,1 @@
+ALTER TABLE public.positions ADD COLUMN strategy_id uuid REFERENCES public.strategies(id) ON DELETE SET NULL;

@@ -1,75 +1,69 @@
+## Portfolio Analytics: Playbook Tracking, Calendar View, and Performance Metrics
 
-## Plan: Stop Loss, Trailing Stop, and Win Rate Stats
+### Overview
 
-### What's Missing Today
+Enhance the Portfolio page with four additions:
 
-The `positions` table only tracks open positions with basic P&L. There are no columns for:
-- Stop loss price or percentage
-- Trailing stop logic (move SL up after hitting profit target)
-- Closed trade history (exit price, exit date, outcome)
-- Win/loss statistics
+```text
+Enhance the Portfolio page with the following four additions and make it the central place for understanding positions, strategy performance, and historical results.
 
----
+1. Link each position to its originating playbook/strategy
+   - Add a new column in the Active Positions table called "Playbook" or "Strategy"
+   - Show the name of the playbook/strategy that triggered the entry (e.g. "Value Zone", "Fallen Angel", "Custom Momentum v2")
+   - Display it as a clickable badge or link
+   - Clicking it filters the positions table to only show trades from that playbook or opens a quick preview of the playbook rules
 
-### 1. Database Changes
+2. Add Risk/Reward Ratio and Profit Factor summary cards
+   - Place two new cards in the top summary row (next to Total Value, % Deployed, Unrealized P&L, etc.)
+   - Risk/Reward Ratio: calculated as average win % / |average loss %| across closed positions
+     - Also show dollar-weighted version in tooltip: total $ won / total $ risked
+     - Label example: "2.3:1 (percentage) • $2.80 per $1 risked (dollar)"
+   - Profit Factor: total winning P&L / |total losing P&L| across all closed positions
+     - Add small interpretation label: "1.5–2.0 = good | >2.0 = excellent | <1.0 = losing"
+   - Both computed client-side from already-fetched closed positions data
 
-Add new columns to the `positions` table:
+3. Add a Calendar view showing daily wins and losses
+   - Add a new tab or collapsible section called "Calendar" (alongside Open / Closed positions tabs)
+   - Show a monthly calendar grid (use date-fns for date math + simple CSS grid, no external calendar library)
+   - Each day cell:
+     - Green dot or background intensity for net positive days
+     - Crimson for net negative
+     - Amber for breakeven or very small net
+     - Gray/no color for days with no closed trades
+   - Size or opacity of the color reflects magnitude of daily net P&L
+   - Add month navigation arrows and a time range selector (Last 30 days / 90 days / 1 year / All time)
+   - Hover or click a day to show tooltip or popover with:
+     - Net P&L for that day
+     - List of trades closed that day
 
-- `stop_loss_pct` (numeric) -- initial stop loss percentage (e.g., -35 means exit at 35% loss)
-- `trailing_stop_pct` (numeric, nullable) -- trailing stop % once profit target is hit
-- `profit_target_pct` (numeric, nullable) -- the profit % threshold that activates the trailing stop
-- `trailing_active` (boolean, default false) -- whether trailing stop has been activated
-- `highest_pnl_pct` (numeric, nullable) -- tracks the high-water mark for trailing stop calc
-- `exit_price` (numeric, nullable) -- filled when position is closed
-- `closed_at` (timestamptz, nullable) -- when the position was closed
-- `exit_reason` (text, nullable) -- "stop_loss", "trailing_stop", "manual", "roll", etc.
+4. Add per-playbook performance breakdown
+   - Add a collapsible section or card grid below the summary cards called "Playbook Performance"
+   - One card per active playbook (fetched from strategies table, grouped by strategy_id on positions)
+   - For each playbook show:
+     - Win Rate (% profitable closed trades)
+     - Net P&L (total $)
+     - Profit Factor (wins / |losses|)
+     - R:R Ratio (avg win % / |avg loss %|)
+     - Expected Return per Trade = (win rate × avg win %) + ((1 - win rate) × avg loss %)
+     - Trade Count (number of closed trades from this playbook)
+     - Optional: Avg Holding Period (average days held)
+   - Color-code each card by overall profitability (green = strong, amber = neutral, red = weak)
+   - Clicking a playbook card filters the positions table to show only trades from that strategy
 
----
+Technical details:
+- Database: Already has strategy_id on positions table (or add it if missing)
+- Calculations: all client-side from fetched positions data (open + closed)
+- Use existing date-fns library for calendar math
+- Keep dark terminal theme (charcoal, emerald green success, crimson danger, amber warnings, cyan-blue accents)
+- Ensure mobile-responsive layout
+- Default to paper trading mode
+- Add plain-English tooltips or Gemini explanations when user asks (e.g. "what does Profit Factor mean?")
 
-### 2. Portfolio Page Enhancements
+Prioritize clean layout:
+1. Summary cards row (including new R:R and Profit Factor)
+2. Active Positions table with Playbook column
+3. Collapsible Playbook Performance section
+4. Calendar tab or collapsible section
 
-**New summary cards:**
-- **Win Rate** -- calculated from closed positions (where `status = 'closed'` and `pnl > 0`)
-- **Avg Win / Avg Loss** -- average P&L % of winners vs losers
-- **Total Closed** -- number of completed trades
-
-**Per-position stop loss display:**
-- Show the current SL level in the table (new column)
-- Color-code: red if price is near SL, green if trailing stop is active
-- Show a small indicator when trailing stop has been activated (e.g., lock icon)
-
-**Editable stop loss per position:**
-- Click a position's SL cell to edit stop loss % and trailing stop settings
-- Popover or inline edit with fields: Initial SL %, Profit Target %, Trailing Stop %
-
-**Closed positions tab:**
-- Add a toggle or tab to view closed/historical trades with exit reason and outcome
-
----
-
-### 3. Stop Loss Logic
-
-Based on your strategy rules (from project memory):
-- Default initial stop loss: **-35%** (configurable per position)
-- Trailing stop activates at a configurable profit target (e.g., +50%)
-- Once active, trailing stop trails at a set % below the high-water mark (e.g., -20% from peak)
-- The `suggestion` field already flags positions -- this will now also flag when a position is near its stop loss
-
----
-
-### 4. Technical Details
-
-**Migration SQL** adds the new columns to `positions` with sensible defaults (stop_loss_pct defaults to -35).
-
-**Portfolio.tsx changes:**
-- Fetch both open and closed positions (two queries or filter client-side)
-- Compute win rate, avg win, avg loss from closed positions
-- Add SL column to the table with inline edit (popover with slider for SL %, profit target, trailing %)
-- Add "Closed Trades" section below open positions
-- Show trailing stop status with visual indicator
-
-**Files to modify:**
-- `src/pages/Portfolio.tsx` -- major UI additions (stats cards, SL column, closed trades section, inline SL editor)
-- Database migration -- add columns to `positions`
-
-**No edge function changes needed** -- the stop loss monitoring/alerting can be added later as a scheduled function. This plan focuses on the UI and data model first.
+Make sure all new metrics are clearly labeled and easy to understand.
+```

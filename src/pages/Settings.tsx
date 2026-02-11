@@ -150,8 +150,13 @@ export default function Settings() {
         )}
       </section>
 
-      {/* Watchlist */}
-      <WatchlistEditor watchlist={watchlist} onChange={setWatchlist} />
+      {/* Default Watchlist */}
+      <div className="space-y-1">
+        <WatchlistEditor watchlist={watchlist} onChange={setWatchlist} />
+        <p className="text-xs text-muted-foreground px-1">
+          Default fallback — per-strategy tickers override this list when set.
+        </p>
+      </div>
 
       {/* Strategy Playbook */}
       {user && <StrategyPlaybook userId={user.id} />}

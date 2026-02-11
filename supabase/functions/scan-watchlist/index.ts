@@ -34,9 +34,7 @@ Deno.serve(async (req) => {
     const allAlerts: any[] = [];
 
     for (const profile of profiles || []) {
-      // Allow override of tickers for testing
-      const watchlist: string[] = body.tickers || profile.stock_watchlist || [];
-      if (watchlist.length === 0) continue;
+      const defaultWatchlist: string[] = body.tickers || profile.stock_watchlist || [];
 
       // Load user strategies from DB
       const { data: userStrategies } = await supabase
@@ -45,9 +43,37 @@ Deno.serve(async (req) => {
         .eq("user_id", profile.id)
         .eq("enabled", true);
 
-      // Process each ticker — free tier allows per-ticker aggs
-      for (const ticker of watchlist) {
+      // Build per-strategy ticker lists; fall back to default watchlist
+      interface StrategyWithTickers {
+        strategy: any | null;
+        tickers: string[];
+      }
+      const strategyRuns: StrategyWithTickers[] = [];
+
+      if (userStrategies && userStrategies.length > 0) {
+        for (const strat of userStrategies) {
+          const stratTickers: string[] = (strat as any).tickers || [];
+          strategyRuns.push({
+            strategy: strat,
+            tickers: stratTickers.length > 0 ? stratTickers : defaultWatchlist,
+          });
+        }
+      } else {
+        // No strategies — use hardcoded detection with default watchlist
+        strategyRuns.push({ strategy: null, tickers: defaultWatchlist });
+      }
+
+      // Deduplicate tickers across all strategy runs to avoid redundant API calls
+      const tickerDataCache: Record<string, any> = {};
+
+      for (const run of strategyRuns) {
+        if (run.tickers.length === 0) continue;
+
+        for (const ticker of run.tickers) {
         try {
+          // Use cached data if already fetched
+          let tickerData = tickerDataCache[ticker];
+          if (!tickerData) {
           // Fetch 250 daily bars (enough for 200 SMA + RSI)
           const to = new Date().toISOString().split("T")[0];
           const fromDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -69,31 +95,25 @@ Deno.serve(async (req) => {
           const changePct = prev.c > 0 ? ((latest.c - prev.c) / prev.c) * 100 : 0;
           const volume = latest.v;
 
-          // Compute SMA 50
-          const sma50 = bars.length >= 50
-            ? bars.slice(-50).reduce((s, b) => s + b.c, 0) / 50
-            : 0;
-
-          // Compute SMA 200
-          const sma200 = bars.length >= 200
-            ? bars.slice(-200).reduce((s, b) => s + b.c, 0) / 200
-            : 0;
-
-          // Compute average volume (50-day)
-          const avgVolume = bars.length >= 50
-            ? bars.slice(-50).reduce((s, b) => s + b.v, 0) / 50
-            : volume;
-
+          const sma50 = bars.length >= 50 ? bars.slice(-50).reduce((s, b) => s + b.c, 0) / 50 : 0;
+          const sma200 = bars.length >= 200 ? bars.slice(-200).reduce((s, b) => s + b.c, 0) / 200 : 0;
+          const avgVolume = bars.length >= 50 ? bars.slice(-50).reduce((s, b) => s + b.v, 0) / 50 : volume;
           const volRatio = avgVolume > 0 ? volume / avgVolume : 1;
-
-          // Compute RSI (14-period)
           const rsi = computeRSI(bars, 14);
 
-          // Try user strategies first, then fall back to hardcoded detection
+          tickerData = { price, changePct, volume, sma50, sma200, avgVolume, volRatio, rsi };
+          tickerDataCache[ticker] = tickerData;
+
+          // Rate limit after data fetch
+          await sleep(13000);
+          }
+
+          const { price, changePct, volume, sma50, sma200, avgVolume, volRatio, rsi } = tickerData;
+
+          // Determine scanner type for this strategy+ticker combo
           let scannerType: string | null = null;
-          if (userStrategies && userStrategies.length > 0) {
-            for (const strat of userStrategies) {
-              const conds = strat.conditions || {};
+          if (run.strategy) {
+              const conds = run.strategy.conditions || {};
               let match = true;
               if (conds.rsi_max != null && rsi > conds.rsi_max) match = false;
               if (conds.rsi_min != null && rsi < conds.rsi_min) match = false;
@@ -110,14 +130,9 @@ Deno.serve(async (req) => {
                 const drawdown = ((sma50 - price) / sma50) * 100;
                 if (drawdown < conds.drawdown_from_sma50_min) match = false;
               }
-              if (match) {
-                scannerType = strat.scanner_type;
-                break;
-              }
-            }
-          }
-          // Fallback to hardcoded detection
-          if (!scannerType) {
+              if (match) scannerType = run.strategy.scanner_type;
+          } else {
+            // No strategy — use hardcoded detection
             scannerType = detectScannerType(price, sma50, sma200, rsi, volRatio, changePct);
           }
           if (!scannerType) continue;
@@ -231,12 +246,11 @@ Deno.serve(async (req) => {
             confluence_score: confluenceScore,
           });
 
-          // Rate limit: free tier = 5 req/min (~12s per ticker for 4 calls)
-          await sleep(13000);
         } catch (e) {
           console.error(`Error processing ${ticker}:`, e);
         }
       }
+      } // end strategyRuns loop
     }
 
     // Insert alerts

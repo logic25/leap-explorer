@@ -1,0 +1,1 @@
+ALTER TABLE public.strategies ADD COLUMN tickers TEXT[] NOT NULL DEFAULT '{}';

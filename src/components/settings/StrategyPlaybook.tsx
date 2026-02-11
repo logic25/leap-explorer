@@ -31,6 +31,7 @@ interface Strategy {
   description: string;
   conditions: Record<string, any>;
   enabled: boolean;
+  tickers: string[];
 }
 
 interface StrategyPlaybookProps {
@@ -45,6 +46,7 @@ const DEFAULT_STRATEGY: Strategy = {
   description: '',
   conditions: {},
   enabled: true,
+  tickers: [],
 };
 
 export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
@@ -56,6 +58,7 @@ export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<Strategy>({ ...DEFAULT_STRATEGY });
+  const [tickerInput, setTickerInput] = useState('');
 
   useEffect(() => {
     loadStrategies();
@@ -67,20 +70,34 @@ export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
       .select('*')
       .eq('user_id', userId)
       .order('created_at');
-    if (data) setStrategies(data as Strategy[]);
+    if (data) setStrategies(data.map((d: any) => ({ ...d, tickers: d.tickers || [] })) as Strategy[]);
     setLoading(false);
   };
 
   const openNewModal = () => {
     setEditIndex(null);
     setDraft({ ...DEFAULT_STRATEGY });
+    setTickerInput('');
     setModalOpen(true);
   };
 
   const openEditModal = (index: number) => {
     setEditIndex(index);
-    setDraft({ ...strategies[index] });
+    setDraft({ ...strategies[index], tickers: strategies[index].tickers || [] });
+    setTickerInput('');
     setModalOpen(true);
+  };
+
+  const addTickers = () => {
+    const newTickers = tickerInput.toUpperCase().split(/[\s,]+/).filter(t => t && !draft.tickers.includes(t));
+    if (newTickers.length > 0) {
+      setDraft(prev => ({ ...prev, tickers: [...prev.tickers, ...newTickers] }));
+    }
+    setTickerInput('');
+  };
+
+  const removeTicker = (ticker: string) => {
+    setDraft(prev => ({ ...prev, tickers: prev.tickers.filter(t => t !== ticker) }));
   };
 
   const deleteStrategy = async (index: number) => {
@@ -145,7 +162,8 @@ export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
             description: draft.description,
             conditions: draft.conditions,
             enabled: draft.enabled,
-          })
+            tickers: draft.tickers,
+          } as any)
           .eq('id', draft.id);
         if (error) throw error;
         setStrategies(prev => prev.map((s, i) => (i === editIndex ? { ...draft } : s)));
@@ -159,7 +177,8 @@ export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
             description: draft.description,
             conditions: draft.conditions,
             enabled: draft.enabled,
-          })
+            tickers: draft.tickers,
+          } as any)
           .select()
           .single();
         if (error) throw error;
@@ -220,6 +239,13 @@ export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
               </Button>
             </div>
           </div>
+          {strategy.tickers && strategy.tickers.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {strategy.tickers.map(t => (
+                <span key={t} className="bg-accent text-accent-foreground text-xs px-1.5 py-0.5 rounded font-mono">{t}</span>
+              ))}
+            </div>
+          )}
           {strategy.description && (
             <p className="text-xs text-muted-foreground line-clamp-2">{strategy.description}</p>
           )}
@@ -280,6 +306,37 @@ export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
                 onCheckedChange={e => setDraft(prev => ({ ...prev, enabled: e }))}
               />
               <span className="text-xs text-muted-foreground">{draft.enabled ? 'Enabled' : 'Disabled'}</span>
+            </div>
+
+            {/* Per-strategy tickers */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Tickers (leave empty to use Default Watchlist)</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={tickerInput}
+                  onChange={e => setTickerInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTickers(); } }}
+                  placeholder="e.g. NVDA, MSFT, AMZN"
+                  className="flex-1"
+                />
+                <Button type="button" variant="outline" size="sm" onClick={addTickers} disabled={!tickerInput.trim()}>
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+              {draft.tickers.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {draft.tickers.map(t => (
+                    <button
+                      key={t}
+                      onClick={() => removeTicker(t)}
+                      className="bg-accent text-accent-foreground text-xs px-2 py-0.5 rounded font-mono hover:bg-destructive/20 hover:text-destructive transition-colors"
+                      title="Click to remove"
+                    >
+                      {t} ×
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <Tabs defaultValue="ai" className="w-full">

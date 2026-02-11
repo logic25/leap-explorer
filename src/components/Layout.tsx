@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Briefcase,
   BarChart3,
+  Target,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -23,6 +24,7 @@ import { useAuth } from '@/hooks/useAuth';
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Scanner' },
   { to: '/portfolio', icon: Briefcase, label: 'Portfolio' },
+  { to: '/wealth-builder', icon: Target, label: 'Wealth Builder' },
   { to: '/backtester', icon: BarChart3, label: 'Backtester' },
   { to: '/audit', icon: ScrollText, label: 'Audit Log' },
   { to: '/settings', icon: Settings, label: 'Settings' },

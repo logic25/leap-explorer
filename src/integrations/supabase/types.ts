@@ -82,6 +82,7 @@ export type Database = {
           pnl_pct: number | null
           profit_target_pct: number | null
           qty: number
+          roll_status: string | null
           status: string
           stop_loss_pct: number | null
           strategy_id: string | null
@@ -113,6 +114,7 @@ export type Database = {
           pnl_pct?: number | null
           profit_target_pct?: number | null
           qty?: number
+          roll_status?: string | null
           status?: string
           stop_loss_pct?: number | null
           strategy_id?: string | null
@@ -144,6 +146,7 @@ export type Database = {
           pnl_pct?: number | null
           profit_target_pct?: number | null
           qty?: number
+          roll_status?: string | null
           status?: string
           stop_loss_pct?: number | null
           strategy_id?: string | null
@@ -317,6 +320,36 @@ export type Database = {
           id?: string
           name?: string
           scanner_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wealth_goals: {
+        Row: {
+          created_at: string
+          id: string
+          starting_capital: number
+          target_value: number
+          time_horizon_years: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          starting_capital?: number
+          target_value?: number
+          time_horizon_years?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          starting_capital?: number
+          target_value?: number
+          time_horizon_years?: number
           updated_at?: string
           user_id?: string
         }

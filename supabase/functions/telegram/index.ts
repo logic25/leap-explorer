@@ -277,9 +277,9 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
 
       await sendTelegramMessage(token, chatId,
         `🤖 *AI Price Suggestion for ${ticker}*\n\n` +
-        `Ask: $${alert.ask_price || "?"}\n` +
-        `Historical Low: $${alert.historical_low || "?"}\n` +
-        `IV Percentile: ${alert.iv_percentile || "?"}%\n` +
+        `Ask: $${alert.ask_price || "N/A"}\n` +
+        `Historical Low: $${alert.historical_low || "N/A"}\n` +
+        `IV Percentile: ${alert.iv_percentile != null ? alert.iv_percentile + "%" : "N/A (delayed data)"}\n` +
         `Scanner: ${alert.scanner_type}\n\n` +
         `💡 *Suggested Limit: $${aiSuggestion.price}*\n` +
         `_${aiSuggestion.reasoning}_\n\n` +

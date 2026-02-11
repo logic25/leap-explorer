@@ -106,7 +106,7 @@ export default function Portfolio() {
     );
   }
 
-  const openHeaders = ['Ticker', 'Playbook', 'Strike / Exp', 'Qty', 'Avg Cost', 'Current', 'P&L', 'Stop Loss', 'Delta', 'DTE', 'Alloc %', 'Action'];
+  const openHeaders = ['Ticker', 'Playbook', 'Strike / Exp', 'Qty', 'Avg Cost', 'Current', 'P&L', 'Stop Loss', 'Delta', 'DTE', 'Alloc %', 'Roll Status', 'Action'];
   const closedHeaders = ['Ticker', 'Playbook', 'Strike / Exp', 'Entry', 'Exit', 'P&L', 'Reason', 'Closed'];
 
   return (

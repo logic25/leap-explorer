@@ -197,6 +197,13 @@ Deno.serve(async (req) => {
 
           const checklist = buildChecklist(scannerType, price, sma50, sma200, rsi, optionData);
           const allPassed = checklist.every((c: any) => c.passed);
+          const passedCount = checklist.filter((c: any) => c.passed).length;
+          const confluenceScore = `${passedCount}/${checklist.length}`;
+
+          // Compute suggested limit price (mid from bid/ask)
+          const askP = optionData.ask_price || 0;
+          const bidP = askP > 0 ? askP * 0.96 : 0;
+          const suggestedLimitPrice = askP > 0 ? Math.round(((askP + bidP) / 2) * 100) / 100 : null;
 
           allAlerts.push({
             user_id: profile.id,
@@ -215,10 +222,13 @@ Deno.serve(async (req) => {
             open_interest: optionData.open_interest || null,
             bid_ask_spread: optionData.bid_ask_spread || null,
             iv_percentile: optionData.iv_percentile || null,
+            iv_rank: optionData.iv_rank || null,
+            iv_hv_ratio: optionData.iv_hv_ratio || null,
             ask_price: optionData.ask_price || null,
             historical_low: optionData.historical_low || null,
             checklist,
             all_passed: allPassed,
+            confluence_score: confluenceScore,
           });
 
           // Rate limit: free tier = 5 req/min (~12s per ticker for 4 calls)
@@ -250,8 +260,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Send Telegram alerts
-    if (allAlerts.length > 0) {
+    // Send Telegram alerts — only for 100% checklist passes
+    const qualifiedAlerts = allAlerts.filter(a => a.all_passed);
+    if (qualifiedAlerts.length > 0) {
       try {
         const telegramUrl = `${SUPABASE_URL}/functions/v1/telegram`;
         await fetch(telegramUrl, {
@@ -260,7 +271,7 @@ Deno.serve(async (req) => {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
           },
-          body: JSON.stringify({ action: "send_alerts", alerts: allAlerts }),
+          body: JSON.stringify({ action: "send_alerts", alerts: qualifiedAlerts }),
         });
       } catch (e) {
         console.error("Telegram alert send failed:", e);
@@ -356,6 +367,8 @@ function buildChecklist(
     { label: "Option Chain: Bid-Ask < 2-5%", passed: opt.bid_ask_spread != null ? opt.bid_ask_spread < 5 : false },
     { label: "Option Chain: IV Term Structure", passed: scannerType !== "Fallen Angel" },
     { label: "Option Chain: IV Percentile < 50th", passed: opt.iv_percentile != null ? opt.iv_percentile < 50 : true },
+    { label: "Option Chain: IV Rank < 50", passed: opt.iv_rank != null ? opt.iv_rank < 50 : true },
+    { label: "Option Chain: IV/HV Ratio < 1.1", passed: opt.iv_hv_ratio != null ? opt.iv_hv_ratio < 1.1 : true },
     { label: "Portfolio: Size 2-4% / Total < 25%", passed: true },
     { label: "No Earnings in 2 Weeks", passed: true },
     { label: "Thesis Understood", passed: false },

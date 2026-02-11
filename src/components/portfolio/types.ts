@@ -28,6 +28,7 @@ export interface Position {
   created_at: string;
   updated_at: string;
   strategy_id: string | null;
+  roll_status: string | null;
 }
 
 export interface Strategy {

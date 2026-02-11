@@ -118,6 +118,9 @@ export function PositionRow({ pos, onUpdateSL, onExit, strategyName, onStrategyC
       </td>
       <td className="px-4 py-3 font-mono text-foreground">{(pos.allocation || 0).toFixed(1)}%</td>
       <td className="px-4 py-3">
+        <RollStatusBadge status={pos.roll_status} />
+      </td>
+      <td className="px-4 py-3">
         {pos.suggestion ? (
           <Button size="sm" variant="outline" className="text-xs gap-1 border-warning/40 text-warning hover:bg-warning/10 hover:text-warning">
             <RefreshCw className="h-3 w-3" />Roll
@@ -151,6 +154,20 @@ export function PositionRow({ pos, onUpdateSL, onExit, strategyName, onStrategyC
         )}
       </td>
     </tr>
+  );
+}
+
+function RollStatusBadge({ status }: { status: string | null }) {
+  if (!status) return <span className="text-xs text-muted-foreground">—</span>;
+  const configs: Record<string, { label: string; className: string }> = {
+    ready_to_roll: { label: 'Ready to Roll', className: 'bg-bullish/10 text-bullish border-bullish/30' },
+    exit_suggested: { label: 'Exit Suggested', className: 'bg-warning/10 text-warning border-warning/30' },
+  };
+  const c = configs[status] || { label: status, className: 'bg-muted text-muted-foreground border-border' };
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${c.className}`}>
+      {c.label}
+    </span>
   );
 }
 

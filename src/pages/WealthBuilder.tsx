@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Target, TrendingUp, TrendingDown, DollarSign, Loader2, Sparkles, Save } from 'lucide-react';
+import { Target, TrendingUp, TrendingDown, DollarSign, Loader2, Sparkles, Save, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -30,6 +31,10 @@ export default function WealthBuilder() {
   const [strategies, setStrategies] = useState<any[]>([]);
   const [aiSuggestion, setAiSuggestion] = useState('');
   const [loadingAi, setLoadingAi] = useState(false);
+  // Forecast sliders
+  const [forecastCagr, setForecastCagr] = useState(30);
+  const [forecastVol, setForecastVol] = useState(10);
+  const [forecastHorizon, setForecastHorizon] = useState(10);
 
   useEffect(() => {
     if (user) {
@@ -151,6 +156,25 @@ export default function WealthBuilder() {
     }
     return points;
   }, [goal, requiredCagr, currentCagr, totalPnl, elapsedYears]);
+
+  // Forecast data with sentiment sliders
+  const forecastData = useMemo(() => {
+    const points = [];
+    const baseValue = currentValue;
+    for (let y = 0; y <= forecastHorizon; y++) {
+      const optimistic = baseValue * Math.pow(1 + (forecastCagr + forecastVol) / 100, y);
+      const base = baseValue * Math.pow(1 + forecastCagr / 100, y);
+      const pessimistic = baseValue * Math.pow(1 + (forecastCagr - forecastVol) / 100, y);
+      points.push({
+        year: `Y${y}`,
+        optimistic: Math.round(optimistic),
+        base: Math.round(base),
+        pessimistic: Math.round(pessimistic),
+        target: goal.target_value,
+      });
+    }
+    return points;
+  }, [currentValue, forecastCagr, forecastVol, forecastHorizon, goal.target_value]);
 
   // Strategy contribution
   const strategyContribution = useMemo(() => {
@@ -298,6 +322,71 @@ export default function WealthBuilder() {
             <Line type="monotone" dataKey="actual" stroke="hsl(142, 71%, 45%)" name="Actual" strokeWidth={2} dot={false} connectNulls={false} />
           </LineChart>
         </ResponsiveContainer>
+      </section>
+
+      {/* P&L Forecast with Sliders */}
+      <section className="bg-card rounded-lg border border-border p-5 space-y-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <SlidersHorizontal className="h-4 w-4 text-primary" />
+          P&L Forecast — Scenario Projections
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-muted-foreground">Target CAGR</Label>
+              <span className="text-xs font-mono text-foreground">{forecastCagr}%</span>
+            </div>
+            <Slider min={10} max={50} step={1} value={[forecastCagr]} onValueChange={([v]) => setForecastCagr(v)} />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-muted-foreground">Volatility ±</Label>
+              <span className="text-xs font-mono text-foreground">±{forecastVol}%</span>
+            </div>
+            <Slider min={2} max={25} step={1} value={[forecastVol]} onValueChange={([v]) => setForecastVol(v)} />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-muted-foreground">Horizon (years)</Label>
+              <span className="text-xs font-mono text-foreground">{forecastHorizon}yr</span>
+            </div>
+            <Slider min={3} max={20} step={1} value={[forecastHorizon]} onValueChange={([v]) => setForecastHorizon(v)} />
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={forecastData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis dataKey="year" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+            <YAxis
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={12}
+              tickFormatter={v => `$${(v / 1000000).toFixed(1)}M`}
+            />
+            <Tooltip
+              contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
+              formatter={(value: number) => formatCurrency(value)}
+            />
+            <Legend />
+            <Line type="monotone" dataKey="optimistic" stroke="hsl(142, 71%, 45%)" strokeDasharray="4 4" name={`Bull (${forecastCagr + forecastVol}%)`} dot={false} />
+            <Line type="monotone" dataKey="base" stroke="hsl(var(--primary))" name={`Base (${forecastCagr}%)`} strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="pessimistic" stroke="hsl(0, 84%, 60%)" strokeDasharray="4 4" name={`Bear (${forecastCagr - forecastVol}%)`} dot={false} />
+            <Line type="monotone" dataKey="target" stroke="hsl(var(--muted-foreground))" strokeDasharray="8 4" name="Target" dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+        <div className="grid grid-cols-3 gap-3 text-center text-xs">
+          <div>
+            <div className="text-muted-foreground">Bear Case</div>
+            <div className="font-mono text-bearish">{formatCurrency(forecastData[forecastData.length - 1]?.pessimistic || 0)}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Base Case</div>
+            <div className="font-mono text-primary font-semibold">{formatCurrency(forecastData[forecastData.length - 1]?.base || 0)}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Bull Case</div>
+            <div className="font-mono text-bullish">{formatCurrency(forecastData[forecastData.length - 1]?.optimistic || 0)}</div>
+          </div>
+        </div>
       </section>
 
       {/* Strategy Contribution */}

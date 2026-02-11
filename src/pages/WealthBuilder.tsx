@@ -130,14 +130,22 @@ export default function WealthBuilder() {
   }, [goal]);
 
   const currentValue = goal.starting_capital + totalPnl;
-  const elapsedYears = closedPositions.length > 0
-    ? Math.max(0.1, (Date.now() - new Date(closedPositions[0].created_at).getTime()) / (365.25 * 24 * 3600 * 1000))
-    : 0.1;
-  const currentCagr = elapsedYears > 0
+  
+  // Use the earliest closed_at date as the real start of trading history
+  const elapsedYears = useMemo(() => {
+    if (closedPositions.length === 0) return 0;
+    const earliestClose = closedPositions.reduce((earliest, p) => {
+      const d = new Date(p.closed_at || p.created_at).getTime();
+      return d < earliest ? d : earliest;
+    }, Infinity);
+    return Math.max(0, (Date.now() - earliestClose) / (365.25 * 24 * 3600 * 1000));
+  }, [closedPositions]);
+
+  const currentCagr = elapsedYears > 0.01
     ? (Math.pow(currentValue / goal.starting_capital, 1 / elapsedYears) - 1) * 100
     : 0;
-  const projectedEndValue = goal.starting_capital * Math.pow(1 + currentCagr / 100, goal.time_horizon_years);
   const remainingYears = Math.max(0.1, goal.time_horizon_years - elapsedYears);
+  const projectedEndValue = currentValue * Math.pow(1 + currentCagr / 100, remainingYears);
   const remainingCagr = currentValue > 0
     ? (Math.pow(goal.target_value / currentValue, 1 / remainingYears) - 1) * 100
     : 0;
@@ -148,23 +156,31 @@ export default function WealthBuilder() {
   // Combined chart data — single chart with all scenario lines
   const combinedChartData = useMemo(() => {
     const points = [];
-    for (let y = 0; y <= goal.time_horizon_years; y++) {
+    const totalYears = goal.time_horizon_years;
+    const elapsedFloor = Math.floor(elapsedYears);
+    for (let y = 0; y <= totalYears; y++) {
       const required = goal.starting_capital * Math.pow(1 + requiredCagr / 100, y);
+      // Actual line: interpolate from starting_capital to currentValue over elapsed period
       const actual = y <= elapsedYears
-        ? goal.starting_capital + (totalPnl * (y / Math.max(0.1, elapsedYears)))
+        ? goal.starting_capital + (totalPnl * (y / Math.max(0.01, elapsedYears)))
         : undefined;
-      const projected = goal.starting_capital * Math.pow(1 + currentCagr / 100, y);
-      const optimistic = currentValue * Math.pow(1 + (forecastCagr + forecastVol) / 100, y);
-      const base = currentValue * Math.pow(1 + forecastCagr / 100, y);
-      const pessimistic = currentValue * Math.pow(1 + Math.max(forecastCagr - forecastVol, 0) / 100, y);
+      // Projected: from currentValue at the elapsed point, compound remaining at currentCagr
+      const projected = y <= elapsedYears
+        ? actual
+        : currentValue * Math.pow(1 + currentCagr / 100, y - elapsedYears);
+      // Scenarios: compound from currentValue starting at the elapsed point
+      const yearsFromNow = Math.max(0, y - elapsedYears);
+      const bull = y < elapsedFloor ? undefined : currentValue * Math.pow(1 + (forecastCagr + forecastVol) / 100, yearsFromNow);
+      const base = y < elapsedFloor ? undefined : currentValue * Math.pow(1 + forecastCagr / 100, yearsFromNow);
+      const bear = y < elapsedFloor ? undefined : currentValue * Math.pow(1 + Math.max(forecastCagr - forecastVol, 0) / 100, yearsFromNow);
       points.push({
         year: `Y${y}`,
         target: Math.round(required),
         actual: actual !== undefined ? Math.round(actual) : undefined,
-        projected: Math.round(projected),
-        bull: Math.round(optimistic),
-        base: Math.round(base),
-        bear: Math.round(pessimistic),
+        projected: projected !== undefined ? Math.round(projected) : undefined,
+        bull: bull !== undefined ? Math.round(bull) : undefined,
+        base: base !== undefined ? Math.round(base) : undefined,
+        bear: bear !== undefined ? Math.round(bear) : undefined,
       });
     }
     return points;
@@ -353,6 +369,7 @@ export default function WealthBuilder() {
             <Area type="monotone" dataKey="bear" stroke="hsl(0, 84%, 60%)" fill="none" strokeDasharray="4 4" name={`Bear (${Math.max(forecastCagr - forecastVol, 0)}%)`} dot={false} />
             <Line type="monotone" dataKey="target" stroke="hsl(var(--muted-foreground))" strokeDasharray="8 4" name="Required Path" dot={false} strokeWidth={1} />
             <Line type="monotone" dataKey="actual" stroke="hsl(50, 100%, 50%)" name="Actual" strokeWidth={2.5} dot={false} connectNulls={false} />
+            <Line type="monotone" dataKey="projected" stroke="hsl(50, 100%, 50%)" strokeDasharray="6 3" name="Projected (Current CAGR)" dot={false} strokeWidth={1.5} connectNulls={false} />
           </AreaChart>
         </ResponsiveContainer>
 

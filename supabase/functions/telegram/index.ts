@@ -192,12 +192,50 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
           .single();
         const mode = userProfile?.trading_mode || "paper";
 
-        await supabase.from("audit_log").insert({
+        // Calculate mid-price (limit order at mid)
+        const askPrice = Number(alert.ask_price) || 0;
+        const midPrice = askPrice > 0 ? Math.round(askPrice * 0.99 * 100) / 100 : 0;
+
+        // Create position
+        const { error: posError } = await supabase.from("positions").insert({
           user_id: profile.id,
-          action_type: "TRADE_APPROVED_TELEGRAM",
-          details: { ticker, strike: alert.suggested_strike, expiry: alert.suggested_expiry, delta: alert.delta, mode },
+          ticker,
+          name: alert.name || ticker,
+          option_type: "CALL",
+          strike: alert.suggested_strike,
+          expiry: alert.suggested_expiry,
+          qty: 1,
+          avg_cost: midPrice,
+          current_price: midPrice,
+          delta: alert.delta,
+          dte: alert.dte,
+          pnl: 0,
+          pnl_pct: 0,
+          status: "open",
         });
-        await sendTelegramMessage(token, chatId, `✅ *${ticker} APPROVED*\n\nStrike: $${alert.suggested_strike}\nExpiry: ${alert.suggested_expiry}\nDelta: ${alert.delta}\n\n_Trade logged. ${mode === "live" ? "🔴 LIVE mode." : "📝 Paper mode."}_`);
+
+        if (posError) {
+          console.error("Position insert error:", posError);
+          await sendTelegramMessage(token, chatId, `⚠️ Trade approved but failed to create position: ${posError.message}`);
+        } else {
+          // Audit log
+          await supabase.from("audit_log").insert({
+            user_id: profile.id,
+            action_type: "TRADE_EXECUTED_TELEGRAM",
+            details: { ticker, strike: alert.suggested_strike, expiry: alert.suggested_expiry, delta: alert.delta, mode, fill_price: midPrice },
+          });
+
+          // Send approval + fill notification
+          await sendTelegramMessage(token, chatId,
+            `✅ *${ticker} APPROVED & FILLED*\n\n` +
+            `Strike: $${alert.suggested_strike}\n` +
+            `Expiry: ${alert.suggested_expiry}\n` +
+            `Delta: ${alert.delta}\n` +
+            `Fill Price: $${midPrice.toFixed(2)}\n` +
+            `Qty: 1 contract\n\n` +
+            `_${mode === "live" ? "🔴 LIVE execution." : "📝 Paper trade."} Position opened._`
+          );
+        }
       } else {
         // Reject
         await supabase.from("audit_log").insert({

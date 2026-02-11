@@ -21,22 +21,27 @@ export default function Portfolio() {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [loading, setLoading] = useState(true);
   const [playbookFilter, setPlaybookFilter] = useState<string | null>(null);
+  const [maxAllocPct, setMaxAllocPct] = useState(80);
 
   useEffect(() => {
     if (!user) return;
-    const fetch = async () => {
+    const fetchData = async () => {
       setLoading(true);
-      const [openRes, closedRes, stratRes] = await Promise.all([
+      const [openRes, closedRes, stratRes, profileRes] = await Promise.all([
         supabase.from('positions').select('*').eq('user_id', user.id).eq('status', 'open'),
         supabase.from('positions').select('*').eq('user_id', user.id).eq('status', 'closed'),
         supabase.from('strategies').select('*').eq('user_id', user.id),
+        supabase.from('profiles').select('max_allocation_pct').eq('id', user.id).maybeSingle(),
       ]);
       setPositions((openRes.data as Position[]) || []);
       setClosedPositions((closedRes.data as Position[]) || []);
       setStrategies((stratRes.data as Strategy[]) || []);
+      if (profileRes.data?.max_allocation_pct != null) {
+        setMaxAllocPct(Number(profileRes.data.max_allocation_pct));
+      }
       setLoading(false);
     };
-    fetch();
+    fetchData();
   }, [user]);
 
   const updateStopLoss = async (posId: string, updates: Partial<Position>) => {
@@ -137,7 +142,7 @@ export default function Portfolio() {
           icon={<BarChart3 className="h-3.5 w-3.5" />}
           tooltip="Combined unrealized profit/loss across all open positions."
         />
-        <SummaryCard label="Allocation" value={`${totalAlloc.toFixed(1)}%`} sub="Target: 70-80%" tooltip="Total portfolio capital allocated to open positions. Target range is 70-80% to leave room for new opportunities." />
+        <SummaryCard label="Allocation" value={`${totalAlloc.toFixed(1)}%`} sub={`Target: ${maxAllocPct}%`} color={totalAlloc > maxAllocPct ? 'text-warning' : undefined} tooltip={`Total portfolio capital allocated to open positions. Your target is ${maxAllocPct}% (configurable in Settings).`} />
         <SummaryCard label="Win Rate" value={`${winRate.toFixed(0)}%`} color={winRate >= 50 ? 'text-bullish' : 'text-bearish'} icon={<Trophy className="h-3.5 w-3.5" />} tooltip="Percentage of closed trades that were profitable. Above 50% means more winners than losers." />
         <SummaryCard label="Avg Win" value={`+${avgWin.toFixed(1)}%`} color="text-bullish" tooltip="Average percentage return on winning trades. Higher = better quality wins." />
         <SummaryCard label="Avg Loss" value={`${avgLoss.toFixed(1)}%`} color="text-bearish" tooltip="Average percentage loss on losing trades. Closer to 0% = better risk management." />

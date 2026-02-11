@@ -177,30 +177,39 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_size: number | null
           created_at: string
           display_name: string | null
           email: string | null
           id: string
+          max_allocation_pct: number | null
+          position_size_pct: number | null
           stock_watchlist: Json
           telegram_chat_id: string | null
           trading_mode: string
           updated_at: string
         }
         Insert: {
+          account_size?: number | null
           created_at?: string
           display_name?: string | null
           email?: string | null
           id: string
+          max_allocation_pct?: number | null
+          position_size_pct?: number | null
           stock_watchlist?: Json
           telegram_chat_id?: string | null
           trading_mode?: string
           updated_at?: string
         }
         Update: {
+          account_size?: number | null
           created_at?: string
           display_name?: string | null
           email?: string | null
           id?: string
+          max_allocation_pct?: number | null
+          position_size_pct?: number | null
           stock_watchlist?: Json
           telegram_chat_id?: string | null
           trading_mode?: string

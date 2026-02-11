@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { BarChart3, Loader2, Sparkles, Play } from 'lucide-react';
+import { BarChart3, Loader2, Sparkles, Play, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
 
 interface BacktestResult {
   equityCurve: { date: string; value: number }[];
@@ -21,6 +22,17 @@ interface BacktestResult {
 }
 
 const SCANNER_TYPES = ['Value Zone', 'Fallen Angel', 'MegaRun', 'Custom'];
+
+const METRIC_TOOLTIPS: Record<string, string> = {
+  'CAGR': 'Compound Annual Growth Rate — the annualized return of the strategy. 20-30% is strong for LEAPS.',
+  'Max Drawdown': 'Largest peak-to-trough decline during the test period. Lower is better — under 20% is good risk management.',
+  'Win Rate': 'Percentage of trades that were profitable. Above 50% means more winners than losers.',
+  'Total Trades': 'Number of round-trip trades executed during the backtest period.',
+  'Profit Factor': 'Total $ won ÷ Total $ lost. Above 1.5 is good, above 2.0 is excellent.',
+  'Sharpe Ratio': 'Risk-adjusted return (return ÷ volatility). Above 1.0 is good, above 2.0 is excellent.',
+  'Avg Hold': 'Average number of days positions were held before closing. LEAPS typically 180-365 days.',
+  'Final Value': 'Ending portfolio value after all simulated trades, starting from $100,000.',
+};
 
 export default function Backtester() {
   const { session } = useAuth();
@@ -80,7 +92,6 @@ Be realistic — use known market dynamics. Value Zone typically yields 20-30% C
 
       if (!response.ok) throw new Error('Backtest request failed');
 
-      // Parse streaming response
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
       let fullResponse = '';
@@ -107,7 +118,6 @@ Be realistic — use known market dynamics. Value Zone typically yields 20-30% C
         }
       }
 
-      // Parse metrics from AI response
       const metrics = parseMetrics(fullResponse);
       setResult(metrics);
 
@@ -125,7 +135,7 @@ Be realistic — use known market dynamics. Value Zone typically yields 20-30% C
       </h1>
 
       {/* Input Mode */}
-      <section className="bg-card rounded-lg border border-border p-5 space-y-4">
+      <section className="bg-card rounded-lg border border-border p-4 sm:p-5 space-y-4">
         <div className="flex gap-2">
           <Button
             variant={mode === 'nl' ? 'default' : 'outline'}
@@ -150,7 +160,7 @@ Be realistic — use known market dynamics. Value Zone typically yields 20-30% C
             <Textarea
               value={nlQuery}
               onChange={e => setNlQuery(e.target.value)}
-              placeholder='e.g. "Backtest Fallen Angel on NVDA with -50% stops over 2023-2024" or "Compare Value Zone vs MegaRun on MSFT last 3 years"'
+              placeholder='e.g. "Backtest Fallen Angel on NVDA with -50% stops over 2023-2024"'
               className="min-h-[80px] text-sm"
             />
           </div>
@@ -188,7 +198,7 @@ Be realistic — use known market dynamics. Value Zone typically yields 20-30% C
           </div>
         )}
 
-        <Button onClick={runBacktest} disabled={loading || (mode === 'nl' && !nlQuery.trim())} className="gap-1">
+        <Button onClick={runBacktest} disabled={loading || (mode === 'nl' && !nlQuery.trim())} className="gap-1 w-full sm:w-auto">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
           Run Backtest
         </Button>
@@ -197,27 +207,36 @@ Be realistic — use known market dynamics. Value Zone typically yields 20-30% C
       {/* Results */}
       {result && (
         <>
+          {/* Result Explanation */}
+          <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 flex items-start gap-3">
+            <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">How to Read These Results</p>
+              <p>This simulation models LEAPS call options trading based on your strategy rules. The equity curve shows hypothetical portfolio growth starting from $100K. Key metrics to watch: <strong>CAGR</strong> (annualized return), <strong>Sharpe Ratio</strong> (risk-adjusted quality — above 1.0 is good), and <strong>Max Drawdown</strong> (worst peak-to-trough loss).</p>
+            </div>
+          </div>
+
           {/* Metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <MetricCard label="CAGR" value={`${result.cagr.toFixed(1)}%`} color={result.cagr > 0 ? 'text-bullish' : 'text-bearish'} />
-            <MetricCard label="Max Drawdown" value={`${result.maxDrawdown.toFixed(1)}%`} color="text-bearish" />
-            <MetricCard label="Win Rate" value={`${result.winRate.toFixed(0)}%`} color={result.winRate >= 50 ? 'text-bullish' : 'text-bearish'} />
-            <MetricCard label="Total Trades" value={result.totalTrades.toString()} />
-            <MetricCard label="Profit Factor" value={result.profitFactor.toFixed(2)} color={result.profitFactor >= 1.5 ? 'text-bullish' : 'text-warning'} />
-            <MetricCard label="Sharpe Ratio" value={result.sharpeRatio.toFixed(2)} color={result.sharpeRatio >= 1 ? 'text-bullish' : 'text-warning'} />
-            <MetricCard label="Avg Hold" value={`${result.avgHoldingDays}d`} />
-            <MetricCard label="Final Value" value={`$${result.equityCurve[result.equityCurve.length - 1]?.value.toLocaleString() || '?'}`} />
+            <MetricCard label="CAGR" value={`${result.cagr.toFixed(1)}%`} color={result.cagr > 0 ? 'text-bullish' : 'text-bearish'} tooltip={METRIC_TOOLTIPS['CAGR']} />
+            <MetricCard label="Max Drawdown" value={`${result.maxDrawdown.toFixed(1)}%`} color="text-bearish" tooltip={METRIC_TOOLTIPS['Max Drawdown']} />
+            <MetricCard label="Win Rate" value={`${result.winRate.toFixed(0)}%`} color={result.winRate >= 50 ? 'text-bullish' : 'text-bearish'} tooltip={METRIC_TOOLTIPS['Win Rate']} />
+            <MetricCard label="Total Trades" value={result.totalTrades.toString()} tooltip={METRIC_TOOLTIPS['Total Trades']} />
+            <MetricCard label="Profit Factor" value={result.profitFactor.toFixed(2)} color={result.profitFactor >= 1.5 ? 'text-bullish' : 'text-warning'} tooltip={METRIC_TOOLTIPS['Profit Factor']} />
+            <MetricCard label="Sharpe Ratio" value={result.sharpeRatio.toFixed(2)} color={result.sharpeRatio >= 1 ? 'text-bullish' : 'text-warning'} tooltip={METRIC_TOOLTIPS['Sharpe Ratio']} />
+            <MetricCard label="Avg Hold" value={`${result.avgHoldingDays}d`} tooltip={METRIC_TOOLTIPS['Avg Hold']} />
+            <MetricCard label="Final Value" value={`$${result.equityCurve[result.equityCurve.length - 1]?.value.toLocaleString() || '?'}`} tooltip={METRIC_TOOLTIPS['Final Value']} />
           </div>
 
           {/* Equity Curve */}
-          <section className="bg-card rounded-lg border border-border p-5">
+          <section className="bg-card rounded-lg border border-border p-4 sm:p-5">
             <div className="text-sm font-semibold text-foreground mb-4">Equity Curve</div>
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={result.equityCurve}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={11} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} />
-                <Tooltip
+                <RechartsTooltip
                   contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
                   formatter={(value: number) => [`$${value.toLocaleString()}`, 'Portfolio']}
                 />
@@ -248,12 +267,28 @@ Be realistic — use known market dynamics. Value Zone typically yields 20-30% C
   );
 }
 
-function MetricCard({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
+function MetricCard({ label, value, color, tooltip }: { label: string; value: string; color?: string; tooltip?: string }) {
+  const card = (
     <div className="bg-card rounded-lg border border-border p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        {label}
+        {tooltip && <Info className="h-3 w-3 text-muted-foreground/50" />}
+      </div>
       <div className={`text-lg font-semibold font-mono ${color || 'text-foreground'}`}>{value}</div>
     </div>
+  );
+
+  if (!tooltip) return card;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{card}</TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">
+          <p>{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -271,7 +306,6 @@ function parseMetrics(text: string): BacktestResult {
   const sharpeRatio = extract(/Sharpe Ratio:\s*([\d.]+)/i, 1.1);
   const avgHoldingDays = extract(/Avg Holding.*?:\s*(\d+)/i, 180);
 
-  // Generate equity curve
   const months = 24;
   const monthlyReturn = Math.pow(1 + cagr / 100, 1 / 12) - 1;
   const equityCurve: { date: string; value: number }[] = [];

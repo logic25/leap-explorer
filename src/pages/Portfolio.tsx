@@ -7,7 +7,6 @@ import { SummaryCard } from '@/components/portfolio/SummaryCard';
 import { PositionRow, ExitReasonBadge } from '@/components/portfolio/PositionRow';
 import { PlaybookPerformance } from '@/components/portfolio/PlaybookPerformance';
 import { TradeCalendar } from '@/components/portfolio/TradeCalendar';
-import { AssignStrategyModal } from '@/components/portfolio/AssignStrategyModal';
 import { computePlaybookStats } from '@/components/portfolio/types';
 import type { Position, Strategy } from '@/components/portfolio/types';
 import { toast } from 'sonner';
@@ -114,24 +113,6 @@ export default function Portfolio() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Portfolio</h1>
         <div className="flex items-center gap-2">
-          <AssignStrategyModal
-            strategies={strategies}
-            positions={[...positions, ...closedPositions]}
-            onStrategiesChange={setStrategies}
-            onPositionsChange={(updated) => {
-              const openUpdated = updated.filter(p => p.status === 'open' || p.status === undefined);
-              const closedUpdated = updated.filter(p => p.status === 'closed');
-              // Only update if there are matching items
-              setPositions(prev => prev.map(p => {
-                const u = openUpdated.find(x => x.id === p.id);
-                return u || p;
-              }));
-              setClosedPositions(prev => prev.map(p => {
-                const u = closedUpdated.find(x => x.id === p.id);
-                return u || p;
-              }));
-            }}
-          />
           {playbookFilter && (
             <button
               onClick={() => setPlaybookFilter(null)}
@@ -144,24 +125,25 @@ export default function Portfolio() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-9 gap-3">
-        <SummaryCard label="Positions" value={filteredPositions.length.toString()} icon={<Hash className="h-3.5 w-3.5" />} />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3">
+        <SummaryCard label="Positions" value={filteredPositions.length.toString()} icon={<Hash className="h-3.5 w-3.5" />} tooltip="Number of currently open positions in your portfolio." />
         <SummaryCard
           label="Total P&L"
           value={`${totalPnl >= 0 ? '+' : ''}$${totalPnl.toLocaleString()}`}
           color={totalPnl >= 0 ? 'text-bullish' : 'text-bearish'}
           icon={<BarChart3 className="h-3.5 w-3.5" />}
+          tooltip="Combined unrealized profit/loss across all open positions."
         />
-        <SummaryCard label="Allocation" value={`${totalAlloc.toFixed(1)}%`} sub="Target: 70-80%" />
-        <SummaryCard label="Win Rate" value={`${winRate.toFixed(0)}%`} color={winRate >= 50 ? 'text-bullish' : 'text-bearish'} icon={<Trophy className="h-3.5 w-3.5" />} />
-        <SummaryCard label="Avg Win" value={`+${avgWin.toFixed(1)}%`} color="text-bullish" />
-        <SummaryCard label="Avg Loss" value={`${avgLoss.toFixed(1)}%`} color="text-bearish" />
-        <SummaryCard label="Closed" value={filteredClosed.length.toString()} sub={`${winners.length}W / ${losers.length}L`} />
+        <SummaryCard label="Allocation" value={`${totalAlloc.toFixed(1)}%`} sub="Target: 70-80%" tooltip="Total portfolio capital allocated to open positions. Target range is 70-80% to leave room for new opportunities." />
+        <SummaryCard label="Win Rate" value={`${winRate.toFixed(0)}%`} color={winRate >= 50 ? 'text-bullish' : 'text-bearish'} icon={<Trophy className="h-3.5 w-3.5" />} tooltip="Percentage of closed trades that were profitable. Above 50% means more winners than losers." />
+        <SummaryCard label="Avg Win" value={`+${avgWin.toFixed(1)}%`} color="text-bullish" tooltip="Average percentage return on winning trades. Higher = better quality wins." />
+        <SummaryCard label="Avg Loss" value={`${avgLoss.toFixed(1)}%`} color="text-bearish" tooltip="Average percentage loss on losing trades. Closer to 0% = better risk management." />
+        <SummaryCard label="Closed" value={filteredClosed.length.toString()} sub={`${winners.length}W / ${losers.length}L`} tooltip="Total closed trades with win/loss breakdown." />
         <SummaryCard
           label="R:R Ratio"
           value={rrRatio === Infinity ? '∞' : `${rrRatio.toFixed(1)}:1`}
           icon={<Scale className="h-3.5 w-3.5" />}
-          tooltip={`Avg win % / |avg loss %|. Dollar-weighted: $${dollarRR.toFixed(2)} per $1 risked`}
+          tooltip={`Risk/Reward Ratio = Average Win % ÷ |Average Loss %|. Above 1.5:1 is good. Dollar-weighted: $${dollarRR.toFixed(2)} per $1 risked.`}
           color={rrRatio >= 1.5 ? 'text-bullish' : rrRatio >= 1 ? 'text-warning' : 'text-bearish'}
         />
         <SummaryCard
@@ -170,6 +152,7 @@ export default function Portfolio() {
           icon={<TrendingUp className="h-3.5 w-3.5" />}
           sub={profitFactor >= 2 ? 'Excellent' : profitFactor >= 1.5 ? 'Good' : profitFactor >= 1 ? 'Marginal' : 'Losing'}
           color={profitFactor >= 2 ? 'text-bullish' : profitFactor >= 1 ? 'text-warning' : 'text-bearish'}
+          tooltip="Total $ won ÷ Total $ lost. Above 2.0 = excellent, 1.5+ = good, below 1.0 = losing money overall."
         />
       </div>
 

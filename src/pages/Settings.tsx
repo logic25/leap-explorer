@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Eye, EyeOff, Save, Key, Server, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Save, Key, Server, Loader2, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -23,15 +23,18 @@ export default function Settings() {
   const [telegramLinked, setTelegramLinked] = useState(false);
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [accountSize, setAccountSize] = useState(100000);
+  const [positionSizePct, setPositionSizePct] = useState(3);
+  const [maxAllocPct, setMaxAllocPct] = useState(80);
 
   useEffect(() => {
     if (user) {
       supabase
         .from('profiles')
-        .select('telegram_chat_id, trading_mode, stock_watchlist')
+        .select('telegram_chat_id, trading_mode, stock_watchlist, account_size, position_size_pct, max_allocation_pct')
         .eq('id', user.id)
         .single()
-        .then(({ data }) => {
+        .then(({ data }: any) => {
           if (data?.telegram_chat_id) {
             setTelegramChatId(data.telegram_chat_id);
             setTelegramLinked(true);
@@ -42,6 +45,9 @@ export default function Settings() {
           if (data?.stock_watchlist) {
             setWatchlist(data.stock_watchlist as string[]);
           }
+          if (data?.account_size != null) setAccountSize(Number(data.account_size));
+          if (data?.position_size_pct != null) setPositionSizePct(Number(data.position_size_pct));
+          if (data?.max_allocation_pct != null) setMaxAllocPct(Number(data.max_allocation_pct));
         });
     }
   }, [user]);
@@ -55,7 +61,10 @@ export default function Settings() {
         .update({
           stock_watchlist: watchlist as any,
           trading_mode: liveMode ? 'live' : 'paper',
-        })
+          account_size: accountSize,
+          position_size_pct: positionSizePct,
+          max_allocation_pct: maxAllocPct,
+        } as any)
         .eq('id', user.id);
       if (error) throw error;
       toast({ title: 'Settings saved!' });
@@ -148,6 +157,54 @@ export default function Settings() {
             Live mode enabled. All approved trades will execute with real funds via Alpaca.
           </div>
         )}
+      </section>
+
+      {/* Account & Position Sizing */}
+      <section className="bg-card rounded-lg border border-border p-5 space-y-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <BarChart3 className="h-4 w-4 text-primary" />
+          Account & Position Sizing
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <Label className="text-xs text-muted-foreground">Account Size ($)</Label>
+            <Input
+              type="number"
+              value={accountSize}
+              onChange={e => setAccountSize(Number(e.target.value))}
+              className="bg-surface-2 border-border mt-1 font-mono"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Position Size (%)</Label>
+            <Input
+              type="number"
+              value={positionSizePct}
+              onChange={e => setPositionSizePct(Number(e.target.value))}
+              min={1}
+              max={10}
+              step={0.5}
+              className="bg-surface-2 border-border mt-1 font-mono"
+            />
+            <p className="text-[10px] text-muted-foreground mt-0.5">Rule: 2-4% per position</p>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Max Allocation (%)</Label>
+            <Input
+              type="number"
+              value={maxAllocPct}
+              onChange={e => setMaxAllocPct(Number(e.target.value))}
+              min={10}
+              max={100}
+              step={5}
+              className="bg-surface-2 border-border mt-1 font-mono"
+            />
+            <p className="text-[10px] text-muted-foreground mt-0.5">Total portfolio cap</p>
+          </div>
+        </div>
+        <div className="text-xs text-muted-foreground bg-surface-2 rounded-md px-3 py-2">
+          📦 At {positionSizePct}% sizing on ${accountSize.toLocaleString()}, each position max = ${Math.round(accountSize * positionSizePct / 100).toLocaleString()}
+        </div>
       </section>
 
       {/* Default Watchlist */}

@@ -74,13 +74,13 @@ Deno.serve(async (req) => {
       for (const [userId, userAlertList] of Object.entries(userAlerts)) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("telegram_chat_id")
+          .select("telegram_chat_id, account_size, position_size_pct, max_allocation_pct")
           .eq("id", userId)
           .single();
 
         if (!profile?.telegram_chat_id) continue;
 
-        const message = formatAlertMessage(userAlertList);
+        const message = formatAlertMessage(userAlertList, profile);
         await sendTelegramMessage(TELEGRAM_BOT_TOKEN, profile.telegram_chat_id, message);
         sent++;
       }
@@ -186,7 +186,7 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
   // Find user by chat_id
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, trading_mode")
+    .select("id, trading_mode, account_size, position_size_pct, max_allocation_pct")
     .eq("telegram_chat_id", String(chatId))
     .single();
 
@@ -418,6 +418,13 @@ async function executeTradeAndNotify(
   profile: any, alert: any, ticker: string, fillPrice: number, headers: any
 ): Promise<Response> {
   const mode = profile.trading_mode || "paper";
+  const accountSize = Number(profile.account_size) || 100000;
+  const positionSizePct = Number(profile.position_size_pct) || 3;
+
+  // Calculate qty based on position sizing rule
+  const maxPositionValue = accountSize * (positionSizePct / 100);
+  const contractCost = fillPrice * 100; // options are per 100 shares
+  const suggestedQty = contractCost > 0 ? Math.max(1, Math.floor(maxPositionValue / contractCost)) : 1;
 
   const { error: posError } = await supabase.from("positions").insert({
     user_id: profile.id,
@@ -426,14 +433,16 @@ async function executeTradeAndNotify(
     option_type: "CALL",
     strike: alert.suggested_strike,
     expiry: alert.suggested_expiry,
-    qty: 1,
+    qty: suggestedQty,
     avg_cost: fillPrice,
     current_price: fillPrice,
     delta: alert.delta,
     dte: alert.dte,
     pnl: 0,
     pnl_pct: 0,
+    allocation: Math.round((suggestedQty * contractCost / accountSize) * 100 * 10) / 10,
     status: "open",
+    strategy_id: alert.strategy_id || null,
   });
 
   if (posError) {
@@ -443,8 +452,10 @@ async function executeTradeAndNotify(
     await supabase.from("audit_log").insert({
       user_id: profile.id,
       action_type: "TRADE_EXECUTED_TELEGRAM",
-      details: { ticker, strike: alert.suggested_strike, expiry: alert.suggested_expiry, delta: alert.delta, mode, fill_price: fillPrice },
+      details: { ticker, strike: alert.suggested_strike, expiry: alert.suggested_expiry, delta: alert.delta, mode, fill_price: fillPrice, qty: suggestedQty },
     });
+
+    const allocationPct = Math.round((suggestedQty * contractCost / accountSize) * 100 * 10) / 10;
 
     await sendTelegramMessage(token, chatId,
       `✅ *${ticker} FILLED*\n\n` +
@@ -452,7 +463,10 @@ async function executeTradeAndNotify(
       `Expiry: ${alert.suggested_expiry}\n` +
       `Delta: ${alert.delta}\n` +
       `Fill Price: $${fillPrice.toFixed(2)}\n` +
-      `Qty: 1 contract\n\n` +
+      `Qty: ${suggestedQty} contract${suggestedQty > 1 ? "s" : ""}\n` +
+      `Total Cost: $${(suggestedQty * contractCost).toLocaleString()}\n` +
+      `Allocation: ${allocationPct}% of $${accountSize.toLocaleString()}\n\n` +
+      `_Sizing: ${positionSizePct}% rule → max $${maxPositionValue.toLocaleString()}_\n` +
       `_${mode === "live" ? "🔴 LIVE execution." : "📝 Paper trade."} Position opened._`
     );
   }
@@ -536,13 +550,28 @@ async function sendTelegramMessage(token: string, chatId: string | number, text:
   return data;
 }
 
-function formatAlertMessage(alerts: any[]): string {
+function formatAlertMessage(alerts: any[], profile?: any): string {
+  const accountSize = Number(profile?.account_size) || 100000;
+  const positionSizePct = Number(profile?.position_size_pct) || 3;
+  const maxPositionValue = accountSize * (positionSizePct / 100);
+
   const lines = alerts.map((a) => {
     const checkPassed = (a.checklist as any[])?.filter((c: any) => c.passed).length || 0;
     const checkTotal = (a.checklist as any[])?.length || 12;
     const emoji = a.scanner_type === "Value Zone" ? "🔵" : a.scanner_type === "MegaRun" ? "🟢" : "🟡";
-    return `${emoji} *${a.ticker}* — ${a.scanner_type}\n   $${a.price} | RSI ${a.rsi} | Δ${a.delta || "?"} | ${checkPassed}/${checkTotal} ✓\n   Strike: $${a.suggested_strike || "?"} | ${a.suggested_expiry || "?"}`;
+
+    // Position sizing info
+    const askPrice = Number(a.ask_price) || 0;
+    const contractCost = askPrice * 100;
+    const suggestedQty = contractCost > 0 ? Math.max(1, Math.floor(maxPositionValue / contractCost)) : 1;
+    const totalCost = suggestedQty * contractCost;
+    const allocPct = accountSize > 0 ? Math.round((totalCost / accountSize) * 100 * 10) / 10 : 0;
+
+    return `${emoji} *${a.ticker}* — ${a.scanner_type}\n` +
+      `   $${a.price} | RSI ${a.rsi} | Δ${a.delta || "?"} | ${checkPassed}/${checkTotal} ✓\n` +
+      `   Strike: $${a.suggested_strike || "?"} | ${a.suggested_expiry || "?"}\n` +
+      `   📦 ${suggestedQty} contract${suggestedQty > 1 ? "s" : ""} @ $${askPrice.toFixed(2)} = $${totalCost.toLocaleString()} (${allocPct}%)`;
   });
 
-  return `📡 *Daily Scan Results*\n${new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}\n\n${lines.join("\n\n")}\n\n_Reply /approve TICKER for AI price suggestion_\n_Reply /reject TICKER [reason] to pass_`;
+  return `📡 *Daily Scan Results*\n${new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}\n\n${lines.join("\n\n")}\n\n_Sizing: ${positionSizePct}% of $${accountSize.toLocaleString()} = max $${maxPositionValue.toLocaleString()}_\n\n_Reply /approve TICKER for AI price suggestion_\n_Reply /reject TICKER [reason] to pass_`;
 }

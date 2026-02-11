@@ -91,11 +91,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Regime */}
-        {!collapsed && (
-          <div className="px-3 pb-3">
+        <div className={`px-3 pb-3 ${collapsed ? 'px-1' : ''}`}>
+          {collapsed ? (
+            <div className={`flex items-center justify-center py-2 rounded-md text-xs font-bold ${
+              mockRegime.status === 'GREEN' ? 'bg-bullish/15 text-bullish' :
+              mockRegime.status === 'YELLOW' ? 'bg-warning/15 text-warning' :
+              'bg-bearish/15 text-bearish'
+            }`}>
+              {mockRegime.status[0]}
+            </div>
+          ) : (
             <RegimeIndicator regime={mockRegime} />
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Theme toggle + Sign out */}
         <div className="px-2 pb-2 space-y-1">

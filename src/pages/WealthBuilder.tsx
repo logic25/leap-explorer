@@ -141,11 +141,12 @@ export default function WealthBuilder() {
     return Math.max(0, (Date.now() - earliestClose) / (365.25 * 24 * 3600 * 1000));
   }, [closedPositions]);
 
-  const currentCagr = elapsedYears > 0.01
-    ? (Math.pow(currentValue / goal.starting_capital, 1 / elapsedYears) - 1) * 100
+  const currentCagr = elapsedYears > 0.1 && goal.starting_capital > 0
+    ? (Math.pow(Math.max(currentValue, 0.01) / goal.starting_capital, 1 / elapsedYears) - 1) * 100
     : 0;
   const remainingYears = Math.max(0.1, goal.time_horizon_years - elapsedYears);
-  const projectedEndValue = currentValue * Math.pow(1 + currentCagr / 100, remainingYears);
+  const cappedCagr = Math.min(currentCagr, 999);
+  const projectedEndValue = currentValue * Math.pow(1 + cappedCagr / 100, remainingYears);
   const remainingCagr = currentValue > 0
     ? (Math.pow(goal.target_value / currentValue, 1 / remainingYears) - 1) * 100
     : 0;
@@ -332,7 +333,7 @@ export default function WealthBuilder() {
               <Label className="text-xs text-muted-foreground">Forecast CAGR</Label>
               <span className="text-xs font-mono text-foreground">{forecastCagr}%</span>
             </div>
-            <Slider min={10} max={50} step={1} value={[forecastCagr]} onValueChange={([v]) => setForecastCagr(v)} />
+            <Slider min={5} max={200} step={1} value={[forecastCagr]} onValueChange={([v]) => setForecastCagr(v)} />
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">

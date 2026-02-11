@@ -19,7 +19,7 @@ export function TradingViewChart({ ticker, className = '' }: TradingViewChartPro
     script.async = true;
     script.innerHTML = JSON.stringify({
       width: '100%',
-      height: '100%',
+      height: 650,
       symbol: ticker,
       interval: 'W',
       timezone: 'America/New_York',

@@ -44,36 +44,34 @@ const METRIC_TOOLTIPS: Record<string, string> = {
 
 const CHECKLIST_TOOLTIPS: Record<string, string> = {
   // Scanner
-  'Price above 200-day SMA': 'Long-term trend confirmation. Price above SMA200 indicates bullish momentum.',
-  'Price above 50-day SMA': 'Medium-term trend support. Price above SMA50 confirms intermediate uptrend.',
-  'RSI between 30-70': 'Relative Strength Index in neutral zone. Avoids overbought (>70) or oversold (<30) entries.',
-  'Volume above average': 'Trading volume exceeds the 50-day average, confirming institutional interest.',
-  'RSI below 45': 'RSI below 45 suggests the stock is in a value zone, not yet overbought.',
-  'Price near 50-day SMA': 'Price within 3% of SMA50 — potential support/bounce zone.',
-  'Positive daily change': 'Stock closed higher today, showing buying pressure.',
+  'Scanner Confirmation': 'This alert was triggered by one of your playbooks (strategy rule sets). The scanner type (e.g. Value Zone, Fallen Angel, MegaRun) determines which conditions were applied.',
+  'Weekly Chart: Above 200 MA / Clean Uptrend': 'The stock price is above or near its 200-day moving average, confirming a long-term bullish trend. This is a prerequisite for LEAPS entries.',
+  'Weekly Chart: 1-2 ATR Pullback': 'For non-momentum plays, the stock should have pulled back 1-2x its Average True Range from recent highs — a healthy entry dip, not a breakdown.',
   // Greeks
-  'Delta 0.40-0.65': 'Target delta range for LEAPS. Provides good leverage with manageable risk.',
-  'Delta in range': 'Option delta falls within the acceptable target range for the strategy.',
-  'Theta > -0.05': 'Daily time decay is less than $5/contract/day — manageable for long-dated options.',
-  'Vega < 0.50': 'IV sensitivity is contained. Large vega means big P&L swings from IV changes.',
-  // Liquidity
-  'Open Interest > 500': 'Minimum OI threshold for acceptable liquidity. Higher = easier to fill.',
-  'Open Interest > 1000': 'Strong OI ensures tight fills and easy exit when needed.',
+  'Delta 0.5-0.65': 'Delta measures how much the option price moves per $1 change in the stock. 0.50-0.65 gives good leverage while staying responsive to price moves. Target for most strategies.',
+  'Delta 0.4-0.55': 'For Fallen Angel (deep pullback) plays, a slightly lower delta range captures more upside on recovery while reducing premium cost.',
+  'DTE 700-900+': 'Days To Expiration. LEAPS should have 700-900+ days remaining to minimize time decay (theta) and give the thesis time to play out.',
+  'Theta < -$0.05/day (acceptable decay)': 'Theta is the daily cost of holding the option. For LEAPS, decay should be minimal — less than $0.10/day means you\'re not bleeding premium while waiting.',
+  // Liquidity (OI)
+  'OI > 1,000 (liquid)': 'Open Interest is the total number of outstanding contracts. Above 1,000 means active market makers, tighter fills, and easier exits.',
+  'OI > 500 (minimum)': 'Minimum acceptable Open Interest. Below 500 = very illiquid, hard to fill at a fair price, and difficult to exit.',
   // Spread
-  'Bid-Ask Spread < 10%': 'Spread under 10% of mid-price. Tighter = less slippage on entry/exit.',
-  'Bid-Ask Spread < 5%': 'Tight spread indicates strong market maker presence and low transaction costs.',
+  'Bid-Ask Spread < 5%': 'The bid-ask spread as a percentage of the mid-price. Under 5% is acceptable; above it, you lose significant value to slippage on entry and exit.',
+  'Bid-Ask Spread < 2% (ideal)': 'A spread under 2% indicates excellent liquidity and strong market maker presence — minimal slippage cost.',
+  'Est. Slippage < $0.50': 'Estimated dollar cost of crossing the spread per contract. Under $0.50 means you can enter/exit without significant drag on returns.',
   // IV
-  'IV Percentile < 80%': 'IV is not at extreme highs — you\'re not overpaying for volatility.',
-  'IV/HV Ratio < 1.5': 'Implied vol is not excessively above realized vol — fair option pricing.',
+  'IV Percentile < 50th': 'IV Percentile shows where current implied volatility ranks over the past year. Below 50th = options are relatively cheap compared to recent history.',
+  'IV Rank < 50': 'IV Rank measures current IV relative to its 52-week high-low range. Under 50 = you\'re not buying at inflated volatility levels.',
+  'IV/HV Ratio < 1.3 (not overpriced)': 'Implied Volatility ÷ Historical (Realized) Volatility. Above 1.3 means options are priced higher than the stock\'s actual movement warrants — potentially overpaying.',
   // Volume
-  'Option Volume > 0': 'At least some trading activity today — contract is not completely stale.',
-  'Option Volume > 100': 'Decent daily volume ensures the contract is actively traded.',
+  'Options Volume > 0': 'At least some contracts traded today. Zero volume = completely stale contract, likely very wide spreads.',
+  'Volume/OI Ratio < 3 (not front-run)': 'Today\'s volume ÷ open interest. Above 3x = heavy unusual activity suggesting the trade may already be crowded or front-run by institutions.',
   // Quality
-  'Chain Quality > 30': 'Composite score above 30 indicates minimum acceptable chain quality.',
-  'Chain Quality > 50': 'Good overall chain quality — OI, volume, and spread all adequate.',
+  'Chain Quality Score > 50': 'Composite score (0-100) combining OI (40%), Volume (30%), and Spread (30%). Above 50 = the option chain is liquid enough for reliable execution.',
   // Portfolio
-  'Position size within limits': 'Trade size respects your configured position sizing rules.',
-  'Portfolio allocation available': 'Adding this position won\'t exceed your max allocation limit.',
+  'Portfolio: Size 2-4% / Total < 25%': 'Position sizing rule: each trade should be 2-4% of account value, and total LEAPS allocation should not exceed 25% of your portfolio.',
+  'No Earnings in 2 Weeks': 'Avoid entering LEAPS within 2 weeks of an earnings report. IV crush post-earnings can destroy premium even if the stock moves favorably.',
+  'Thesis Understood': 'Manual confirmation that you understand WHY this stock is a good LEAPS candidate — the fundamental story, catalyst, or trend driving the trade. Never enter without a thesis.',
 };
 
 export function ChecklistModal({ alert, open, onClose }: Props) {

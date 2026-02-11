@@ -146,8 +146,10 @@ Deno.serve(async (req) => {
           // Fetch options contracts via free-tier reference endpoint
           let optionData: any = {};
           try {
-            const expGte = "2027-12-01";
-            const expLte = "2028-02-28";
+            // Dynamic DTE: 700-900 days from now
+            const now = Date.now();
+            const expGte = new Date(now + 700 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+            const expLte = new Date(now + 900 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
             const strikeMin = Math.round(price * 0.85);
             const strikeMax = Math.round(price * 1.15);
 

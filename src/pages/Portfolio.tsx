@@ -5,7 +5,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { SummaryCard } from '@/components/portfolio/SummaryCard';
 import { PositionRow, ExitReasonBadge } from '@/components/portfolio/PositionRow';
+import { PositionCard, ClosedPositionCard } from '@/components/portfolio/PositionCard';
 import { PlaybookPerformance } from '@/components/portfolio/PlaybookPerformance';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { TradeCalendar } from '@/components/portfolio/TradeCalendar';
 import { computePlaybookStats } from '@/components/portfolio/types';
 import type { Position, Strategy } from '@/components/portfolio/types';
@@ -13,6 +15,7 @@ import { toast } from 'sonner';
 
 export default function Portfolio() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [positions, setPositions] = useState<Position[]>([]);
   const [closedPositions, setClosedPositions] = useState<Position[]>([]);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
@@ -181,34 +184,49 @@ export default function Portfolio() {
             </div>
           ) : (
             <>
-              <div className="bg-card rounded-lg border border-border overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-surface-2">
-                        {openHeaders.map(h => (
-                          <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredPositions.map(pos => (
-                        <PositionRow
-                          key={pos.id}
-                          pos={pos}
-                          onUpdateSL={updateStopLoss}
-                          onExit={handleExit}
-                          strategyName={pos.strategy_id ? strategyMap.get(pos.strategy_id) : undefined}
-                          onStrategyClick={handlePlaybookClick}
-                          showPlaybook={true}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
+              {isMobile ? (
+                <div className="space-y-3">
+                  {filteredPositions.map(pos => (
+                    <PositionCard
+                      key={pos.id}
+                      pos={pos}
+                      onUpdateSL={updateStopLoss}
+                      onExit={handleExit}
+                      strategyName={pos.strategy_id ? strategyMap.get(pos.strategy_id) : undefined}
+                      onStrategyClick={handlePlaybookClick}
+                    />
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <div className="bg-card rounded-lg border border-border overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-surface-2">
+                          {openHeaders.map(h => (
+                            <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPositions.map(pos => (
+                          <PositionRow
+                            key={pos.id}
+                            pos={pos}
+                            onUpdateSL={updateStopLoss}
+                            onExit={handleExit}
+                            strategyName={pos.strategy_id ? strategyMap.get(pos.strategy_id) : undefined}
+                            onStrategyClick={handlePlaybookClick}
+                            showPlaybook={true}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Suggestions */}
               {filteredPositions.filter(p => p.suggestion).map(pos => (
@@ -248,6 +266,17 @@ export default function Portfolio() {
                 {playbookFilter ? 'No closed trades for this playbook.' : 'No closed trades yet.'}
               </p>
             </div>
+          ) : isMobile ? (
+            <div className="space-y-3">
+              {filteredClosed.map(pos => (
+                <ClosedPositionCard
+                  key={pos.id}
+                  pos={pos}
+                  strategyName={pos.strategy_id ? strategyMap.get(pos.strategy_id) : undefined}
+                  onStrategyClick={handlePlaybookClick}
+                />
+              ))}
+            </div>
           ) : (
             <div className="bg-card rounded-lg border border-border overflow-hidden">
               <div className="overflow-x-auto">
@@ -269,16 +298,16 @@ export default function Portfolio() {
                           <div className="text-xs text-muted-foreground">{pos.option_type}</div>
                         </td>
                         <td className="px-4 py-3">
-                            {pos.strategy_id && strategyMap.get(pos.strategy_id) ? (
-                              <button
-                                onClick={() => handlePlaybookClick(pos.strategy_id!)}
-                                className="text-xs px-2 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer font-medium"
-                              >
-                                {strategyMap.get(pos.strategy_id!)}
-                              </button>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
+                          {pos.strategy_id && strategyMap.get(pos.strategy_id) ? (
+                            <button
+                              onClick={() => handlePlaybookClick(pos.strategy_id!)}
+                              className="text-xs px-2 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer font-medium"
+                            >
+                              {strategyMap.get(pos.strategy_id!)}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 font-mono text-foreground">
                           <div>${pos.strike}</div>

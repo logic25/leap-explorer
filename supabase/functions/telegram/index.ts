@@ -347,8 +347,56 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
     });
   }
 
+  // /orders — Check recent Alpaca orders
+  if (text === "/orders") {
+    const ALPACA_API_KEY = Deno.env.get("ALPACA_API_KEY");
+    const ALPACA_SECRET_KEY = Deno.env.get("ALPACA_SECRET_KEY");
+
+    if (!ALPACA_API_KEY || !ALPACA_SECRET_KEY) {
+      await sendTelegramMessage(token, chatId, "⚠️ Alpaca API keys not configured.");
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...rHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const mode = profile.trading_mode || "paper";
+    const alpacaBaseUrl = mode === "live"
+      ? "https://api.alpaca.markets/v2"
+      : "https://paper-api.alpaca.markets/v2";
+
+    try {
+      const ordersRes = await fetch(`${alpacaBaseUrl}/orders?status=all&limit=10&direction=desc`, {
+        headers: {
+          "APCA-API-KEY-ID": ALPACA_API_KEY,
+          "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
+        },
+      });
+      const orders = await ordersRes.json();
+
+      if (!ordersRes.ok) {
+        await sendTelegramMessage(token, chatId, `⚠️ Alpaca error: ${orders.message || JSON.stringify(orders)}`);
+      } else if (!orders.length) {
+        await sendTelegramMessage(token, chatId, "📋 No recent Alpaca orders.");
+      } else {
+        const lines = orders.map((o: any) => {
+          const filled = o.filled_avg_price ? `$${Number(o.filled_avg_price).toFixed(2)}` : "—";
+          const statusEmoji = o.status === "filled" ? "✅" : o.status === "new" || o.status === "accepted" ? "⏳" : o.status === "canceled" ? "🚫" : "⚠️";
+          return `${statusEmoji} \`${o.symbol?.trim()}\` ${o.side} ${o.qty} @ ${filled}\n   Status: ${o.status} | ${o.type} | ${new Date(o.submitted_at).toLocaleDateString()}`;
+        });
+        await sendTelegramMessage(token, chatId, `📋 *Recent Alpaca Orders* (${mode})\n\n${lines.join("\n\n")}`);
+      }
+    } catch (e) {
+      console.error("Alpaca orders fetch error:", e);
+      await sendTelegramMessage(token, chatId, `⚠️ Failed to fetch orders: ${String(e)}`);
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: { ...rHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   if (text === "/help") {
-    await sendTelegramMessage(token, chatId, "*LEAPS Trader Bot*\n\nCommands:\n/start — Welcome & Chat ID\n/approve TICKER — AI suggests limit price\n/confirm TICKER — Execute at AI price\n/approve TICKER 41.20 — Override price\n/reject TICKER [reason]\n/status — View positions\n/help — This message\n\nOr just ask a question in plain English!");
+    await sendTelegramMessage(token, chatId, "*LEAPS Trader Bot*\n\nCommands:\n/start — Welcome & Chat ID\n/approve TICKER — AI suggests limit price\n/confirm TICKER — Execute at AI price\n/approve TICKER 41.20 — Override price\n/reject TICKER [reason]\n/status — View positions\n/orders — Recent Alpaca orders\n/help — This message\n\nOr just ask a question in plain English!");
   } else {
     // Forward unrecognized messages to Gemini chat AI
     try {

@@ -35,6 +35,7 @@ export default function WealthBuilder() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [totalPnl, setTotalPnl] = useState(0);
+  const [accountSize, setAccountSize] = useState<number | null>(null);
   const [closedPositions, setClosedPositions] = useState<any[]>([]);
   const [strategies, setStrategies] = useState<any[]>([]);
   const [aiSuggestion, setAiSuggestion] = useState('');
@@ -48,6 +49,7 @@ export default function WealthBuilder() {
       loadGoal();
       loadPositions();
       loadStrategies();
+      loadProfile();
     }
   }, [user]);
 
@@ -79,6 +81,15 @@ export default function WealthBuilder() {
       setClosedPositions(data);
       setTotalPnl(data.reduce((sum, p) => sum + (Number(p.pnl) || 0), 0));
     }
+  };
+
+  const loadProfile = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('account_size')
+      .eq('id', user!.id)
+      .maybeSingle();
+    if (data?.account_size) setAccountSize(data.account_size);
   };
 
   const loadStrategies = async () => {
@@ -137,7 +148,8 @@ export default function WealthBuilder() {
   };
   const fmtPct = (n: number) => n > 9999 ? '>9,999%' : `${n.toFixed(1)}%`;
 
-  const currentValue = goal.starting_capital + totalPnl;
+  // Current value = actual account size if available, otherwise fallback to starting_capital + P&L
+  const currentValue = accountSize ?? (goal.starting_capital + totalPnl);
   
   // Use the earliest closed_at date as the real start of trading history
   const elapsedYears = useMemo(() => {

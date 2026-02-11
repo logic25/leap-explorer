@@ -60,7 +60,7 @@ export function TradingViewChart({ ticker, className = '' }: TradingViewChartPro
       <div
         ref={containerRef}
         className="tradingview-widget-container rounded-md overflow-hidden border border-border [&>div]:!h-full [&>iframe]:!h-full"
-        style={{ height: 420 }}
+        style={{ height: 650 }}
       />
     </div>
   );

@@ -19,7 +19,7 @@ interface WealthGoal {
 
 const METRIC_TOOLTIPS: Record<string, string> = {
   'Current Value': 'Starting capital plus total realized P&L from all closed trades.',
-  'Current CAGR': 'Your annualized return based on actual trading performance so far.',
+  'Current CAGR': 'Your annualized return based on realized P&L relative to your account value.',
   'Remaining CAGR': 'The annualized return you need from today to hit your target on time.',
   'Projected End': 'Where you\'ll end up based on your forecast CAGR slider over the remaining horizon.',
 };
@@ -161,8 +161,10 @@ export default function WealthBuilder() {
     return Math.max(0, (Date.now() - earliestClose) / (365.25 * 24 * 3600 * 1000));
   }, [closedPositions]);
 
-  const currentCagr = elapsedYears > 0.1 && goal.starting_capital > 0
-    ? (Math.pow(Math.max(currentValue, 0.01) / goal.starting_capital, 1 / elapsedYears) - 1) * 100
+  // Implied starting account = current value minus all realized P&L
+  const impliedStartValue = Math.max(currentValue - totalPnl, 1);
+  const currentCagr = elapsedYears > 0.1 && impliedStartValue > 0
+    ? (Math.pow(Math.max(currentValue, 0.01) / impliedStartValue, 1 / elapsedYears) - 1) * 100
     : 0;
   const remainingYears = Math.max(0.1, goal.time_horizon_years - elapsedYears);
   // Projected end uses the forecast base case (matching the chart), not historical CAGR

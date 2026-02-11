@@ -38,6 +38,13 @@ Deno.serve(async (req) => {
       const watchlist: string[] = body.tickers || profile.stock_watchlist || [];
       if (watchlist.length === 0) continue;
 
+      // Load user strategies from DB
+      const { data: userStrategies } = await supabase
+        .from("strategies")
+        .select("*")
+        .eq("user_id", profile.id)
+        .eq("enabled", true);
+
       // Process each ticker — free tier allows per-ticker aggs
       for (const ticker of watchlist) {
         try {
@@ -82,8 +89,37 @@ Deno.serve(async (req) => {
           // Compute RSI (14-period)
           const rsi = computeRSI(bars, 14);
 
-          // Determine scanner type
-          const scannerType = detectScannerType(price, sma50, sma200, rsi, volRatio, changePct);
+          // Try user strategies first, then fall back to hardcoded detection
+          let scannerType: string | null = null;
+          if (userStrategies && userStrategies.length > 0) {
+            for (const strat of userStrategies) {
+              const conds = strat.conditions || {};
+              let match = true;
+              if (conds.rsi_max != null && rsi > conds.rsi_max) match = false;
+              if (conds.rsi_min != null && rsi < conds.rsi_min) match = false;
+              if (conds.volume_ratio_min != null && volRatio < conds.volume_ratio_min) match = false;
+              if (conds.change_pct_min != null && changePct < conds.change_pct_min) match = false;
+              if (conds.change_pct_max != null && changePct > conds.change_pct_max) match = false;
+              if (conds.price_vs_sma50 === "above" && price <= sma50) match = false;
+              if (conds.price_vs_sma50 === "below" && price >= sma50) match = false;
+              if (conds.price_vs_sma50 === "near" && Math.abs(price - sma50) / sma50 > 0.03) match = false;
+              if (conds.price_vs_sma200 === "above" && price <= sma200) match = false;
+              if (conds.price_vs_sma200 === "below" && price >= sma200) match = false;
+              if (conds.price_vs_sma200 === "near" && Math.abs(price - sma200) / sma200 > 0.03) match = false;
+              if (conds.drawdown_from_sma50_min != null) {
+                const drawdown = ((sma50 - price) / sma50) * 100;
+                if (drawdown < conds.drawdown_from_sma50_min) match = false;
+              }
+              if (match) {
+                scannerType = strat.scanner_type;
+                break;
+              }
+            }
+          }
+          // Fallback to hardcoded detection
+          if (!scannerType) {
+            scannerType = detectScannerType(price, sma50, sma200, rsi, volRatio, changePct);
+          }
           if (!scannerType) continue;
 
           // Fetch options contracts via free-tier reference endpoint

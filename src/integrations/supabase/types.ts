@@ -251,6 +251,42 @@ export type Database = {
         }
         Relationships: []
       }
+      strategies: {
+        Row: {
+          conditions: Json
+          created_at: string
+          description: string
+          enabled: boolean
+          id: string
+          name: string
+          scanner_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          conditions?: Json
+          created_at?: string
+          description?: string
+          enabled?: boolean
+          id?: string
+          name: string
+          scanner_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          conditions?: Json
+          created_at?: string
+          description?: string
+          enabled?: boolean
+          id?: string
+          name?: string
+          scanner_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

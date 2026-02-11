@@ -3,11 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Eye, EyeOff, Save, Key, Server, List, Send, CheckCircle, Loader2 } from 'lucide-react';
-import { STOCK_LIST } from '@/lib/mock-data';
+import { Eye, EyeOff, Save, Key, Server, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import WatchlistEditor from '@/components/settings/WatchlistEditor';
+import StrategyPlaybook from '@/components/settings/StrategyPlaybook';
+import TelegramSection from '@/components/settings/TelegramSection';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -19,13 +21,14 @@ export default function Settings() {
   const [showKeys, setShowKeys] = useState(false);
   const [telegramChatId, setTelegramChatId] = useState('');
   const [telegramLinked, setTelegramLinked] = useState(false);
-  const [linkingTelegram, setLinkingTelegram] = useState(false);
+  const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
     if (user) {
       supabase
         .from('profiles')
-        .select('telegram_chat_id, trading_mode')
+        .select('telegram_chat_id, trading_mode, stock_watchlist')
         .eq('id', user.id)
         .single()
         .then(({ data }) => {
@@ -36,24 +39,30 @@ export default function Settings() {
           if (data?.trading_mode === 'live') {
             setLiveMode(true);
           }
+          if (data?.stock_watchlist) {
+            setWatchlist(data.stock_watchlist as string[]);
+          }
         });
     }
   }, [user]);
 
-  const linkTelegram = async () => {
-    if (!user || !telegramChatId.trim()) return;
-    setLinkingTelegram(true);
+  const saveSettings = async () => {
+    if (!user) return;
+    setSavingSettings(true);
     try {
-      const { error } = await supabase.functions.invoke('telegram', {
-        body: { action: 'link', user_id: user.id, chat_id: telegramChatId.trim() },
-      });
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          stock_watchlist: watchlist as any,
+          trading_mode: liveMode ? 'live' : 'paper',
+        })
+        .eq('id', user.id);
       if (error) throw error;
-      setTelegramLinked(true);
-      toast({ title: 'Telegram linked!', description: 'Check your Telegram for a confirmation message.' });
+      toast({ title: 'Settings saved!' });
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Failed to link', description: err.message });
+      toast({ variant: 'destructive', title: 'Save failed', description: err.message });
     }
-    setLinkingTelegram(false);
+    setSavingSettings(false);
   };
 
   return (
@@ -61,56 +70,15 @@ export default function Settings() {
       <h1 className="text-xl font-semibold text-foreground">Settings</h1>
 
       {/* Telegram */}
-      <section className="bg-card rounded-lg border border-border p-5 space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Send className="h-4 w-4 text-primary" />
-          Telegram Alerts
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Link your Telegram to receive daily scan alerts and approve trades via reply.
-        </p>
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">
-            Telegram Chat ID
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            Message <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@userinfobot</a> on Telegram to get your Chat ID.
-          </p>
-          <div className="flex gap-2">
-            <Input
-              value={telegramChatId}
-              onChange={e => setTelegramChatId(e.target.value)}
-              placeholder="e.g. 123456789"
-              className="bg-surface-2 border-border"
-              disabled={telegramLinked}
-            />
-            {telegramLinked ? (
-              <Button variant="outline" disabled className="gap-2 shrink-0">
-                <CheckCircle className="h-4 w-4 text-bullish" />
-                Linked
-              </Button>
-            ) : (
-              <Button onClick={linkTelegram} disabled={linkingTelegram || !telegramChatId.trim()} className="gap-2 shrink-0">
-                {linkingTelegram ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Link
-              </Button>
-            )}
-          </div>
-          {telegramLinked && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs text-muted-foreground"
-              onClick={() => {
-                setTelegramLinked(false);
-                setTelegramChatId('');
-              }}
-            >
-              Unlink & change
-            </Button>
-          )}
-        </div>
-      </section>
+      {user && (
+        <TelegramSection
+          userId={user.id}
+          telegramChatId={telegramChatId}
+          setTelegramChatId={setTelegramChatId}
+          telegramLinked={telegramLinked}
+          setTelegramLinked={setTelegramLinked}
+        />
+      )}
 
       {/* API Keys */}
       <section className="bg-card rounded-lg border border-border p-5 space-y-5">
@@ -118,7 +86,6 @@ export default function Settings() {
           <Key className="h-4 w-4 text-primary" />
           API Connections
         </div>
-
         <div className="space-y-4">
           <div>
             <Label className="text-xs text-muted-foreground">Polygon.io API Key</Label>
@@ -183,26 +150,14 @@ export default function Settings() {
         )}
       </section>
 
-      {/* Stock List */}
-      <section className="bg-card rounded-lg border border-border p-5 space-y-3">
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <List className="h-4 w-4 text-primary" />
-          Watchlist ({STOCK_LIST.length} stocks)
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {STOCK_LIST.map(ticker => (
-            <span key={ticker} className="bg-surface-2 border border-border text-xs font-mono px-2 py-1 rounded text-foreground">
-              {ticker}
-            </span>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Full 75-stock list can be uploaded via CSV. Configuration coming soon.
-        </p>
-      </section>
+      {/* Watchlist */}
+      <WatchlistEditor watchlist={watchlist} onChange={setWatchlist} />
 
-      <Button className="gap-2">
-        <Save className="h-4 w-4" />
+      {/* Strategy Playbook */}
+      {user && <StrategyPlaybook userId={user.id} />}
+
+      <Button className="gap-2" onClick={saveSettings} disabled={savingSettings}>
+        {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
         Save Settings
       </Button>
     </div>

@@ -347,7 +347,7 @@ export default function WealthBuilder() {
         <MetricCard label="Current Value" value={fmt(currentValue)} icon={<DollarSign className="h-4 w-4" />} tooltip={METRIC_TOOLTIPS['Current Value']} />
         <MetricCard label="Current CAGR" value={fmtPct(currentCagr)} icon={<TrendingUp className="h-4 w-4" />} color={currentCagr >= 0 ? 'text-bullish' : 'text-bearish'} tooltip={METRIC_TOOLTIPS['Current CAGR']} />
         <MetricCard label="Remaining CAGR" value={fmtPct(remainingCagr)} icon={<TrendingDown className="h-4 w-4" />} tooltip={METRIC_TOOLTIPS['Remaining CAGR']} />
-        <MetricCard label="Projected End" value={fmt(projectedEndValue)} icon={<Target className="h-4 w-4" />} color={projectedEndValue >= goal.target_value ? 'text-bullish' : 'text-bearish'} tooltip={METRIC_TOOLTIPS['Projected End']} />
+        <MetricCard label="Projected End" value={fmt(projectedEndValue)} icon={<Target className="h-4 w-4" />} color={projectedEndValue >= currentValue ? 'text-bullish' : 'text-bearish'} tooltip={METRIC_TOOLTIPS['Projected End']} />
       </div>
 
       {/* Combined Projection Chart with Scenario Sliders */}

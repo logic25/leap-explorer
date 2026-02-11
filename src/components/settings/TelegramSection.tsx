@@ -44,13 +44,16 @@ export default function TelegramSection({ userId, telegramChatId, setTelegramCha
   const sendTestAlert = async () => {
     setSendingTest(true);
     try {
-      const { data, error } = await supabase.functions.invoke('scan-watchlist', {
-        body: { user_id: userId, tickers: ['NVDA', 'MSFT'] },
+      const { error } = await supabase.functions.invoke('telegram', {
+        body: {
+          action: 'send_test',
+          user_id: userId,
+        },
       });
       if (error) throw error;
       toast({
-        title: 'Test scan sent!',
-        description: `${data?.alerts_created || 0} alerts created. Check your Telegram.`,
+        title: 'Test message sent!',
+        description: 'Check your Telegram for the test notification.',
       });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Test failed', description: err.message });
@@ -113,7 +116,7 @@ export default function TelegramSection({ userId, telegramChatId, setTelegramCha
               className="gap-1 text-xs"
             >
               {sendingTest ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-              Send Test Alert (NVDA, MSFT)
+              Send Test Notification
             </Button>
           </div>
         )}

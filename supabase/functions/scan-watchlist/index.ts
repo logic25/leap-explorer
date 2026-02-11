@@ -200,6 +200,23 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Send Telegram alerts
+    if (allAlerts.length > 0) {
+      try {
+        const telegramUrl = `${SUPABASE_URL}/functions/v1/telegram`;
+        await fetch(telegramUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+          },
+          body: JSON.stringify({ action: "send_alerts", alerts: allAlerts }),
+        });
+      } catch (e) {
+        console.error("Telegram alert send failed:", e);
+      }
+    }
+
     return new Response(
       JSON.stringify({ success: true, alerts_created: allAlerts.length, users_scanned: profiles?.length || 0 }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

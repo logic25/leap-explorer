@@ -138,6 +138,7 @@ export type Database = {
           email: string | null
           id: string
           stock_watchlist: Json
+          telegram_chat_id: string | null
           trading_mode: string
           updated_at: string
         }
@@ -147,6 +148,7 @@ export type Database = {
           email?: string | null
           id: string
           stock_watchlist?: Json
+          telegram_chat_id?: string | null
           trading_mode?: string
           updated_at?: string
         }
@@ -156,6 +158,7 @@ export type Database = {
           email?: string | null
           id?: string
           stock_watchlist?: Json
+          telegram_chat_id?: string | null
           trading_mode?: string
           updated_at?: string
         }

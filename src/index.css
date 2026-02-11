@@ -6,6 +6,64 @@
 
 @layer base {
   :root {
+    --background: 210 20% 96%;
+    --foreground: 220 20% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 12%;
+
+    --primary: 195 85% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 14% 90%;
+    --secondary-foreground: 220 16% 30%;
+
+    --muted: 210 14% 93%;
+    --muted-foreground: 215 12% 45%;
+
+    --accent: 210 14% 92%;
+    --accent-foreground: 220 20% 12%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 14% 85%;
+    --input: 214 14% 85%;
+    --ring: 195 85% 42%;
+
+    --radius: 0.5rem;
+
+    /* Trading semantic tokens */
+    --bullish: 152 68% 38%;
+    --bullish-foreground: 152 68% 95%;
+    --bearish: 0 72% 50%;
+    --bearish-foreground: 0 72% 95%;
+    --warning: 38 92% 48%;
+    --warning-foreground: 38 92% 10%;
+    --regime-green: 152 68% 38%;
+    --regime-yellow: 38 92% 48%;
+    --regime-red: 0 72% 50%;
+
+    /* Surface hierarchy */
+    --surface-0: 210 20% 96%;
+    --surface-1: 210 16% 93%;
+    --surface-2: 210 14% 90%;
+    --surface-3: 210 12% 87%;
+
+    --sidebar-background: 210 16% 97%;
+    --sidebar-foreground: 220 16% 40%;
+    --sidebar-primary: 195 85% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 14% 93%;
+    --sidebar-accent-foreground: 220 20% 12%;
+    --sidebar-border: 214 14% 88%;
+    --sidebar-ring: 195 85% 42%;
+  }
+
+  .dark {
     --background: 220 20% 7%;
     --foreground: 210 20% 92%;
 
@@ -33,8 +91,6 @@
     --border: 220 14% 18%;
     --input: 220 14% 18%;
     --ring: 195 85% 50%;
-
-    --radius: 0.5rem;
 
     /* Trading semantic tokens */
     --bullish: 152 68% 45%;

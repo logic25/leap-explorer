@@ -7,8 +7,10 @@ import { SummaryCard } from '@/components/portfolio/SummaryCard';
 import { PositionRow, ExitReasonBadge } from '@/components/portfolio/PositionRow';
 import { PlaybookPerformance } from '@/components/portfolio/PlaybookPerformance';
 import { TradeCalendar } from '@/components/portfolio/TradeCalendar';
+import { AssignStrategyModal } from '@/components/portfolio/AssignStrategyModal';
 import { computePlaybookStats } from '@/components/portfolio/types';
 import type { Position, Strategy } from '@/components/portfolio/types';
+import { toast } from 'sonner';
 
 export default function Portfolio() {
   const { user } = useAuth();
@@ -38,6 +40,26 @@ export default function Portfolio() {
   const updateStopLoss = async (posId: string, updates: Partial<Position>) => {
     await supabase.from('positions').update(updates).eq('id', posId);
     setPositions(prev => prev.map(p => p.id === posId ? { ...p, ...updates } : p));
+  };
+
+  const handleExit = async (posId: string) => {
+    const pos = positions.find(p => p.id === posId);
+    if (!pos) return;
+    const updates = {
+      status: 'closed',
+      exit_price: pos.current_price,
+      exit_reason: 'manual',
+      closed_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from('positions').update(updates).eq('id', posId);
+    if (error) {
+      toast.error('Failed to close position');
+      return;
+    }
+    const closedPos = { ...pos, ...updates } as Position;
+    setPositions(prev => prev.filter(p => p.id !== posId));
+    setClosedPositions(prev => [closedPos, ...prev]);
+    toast.success(`${pos.ticker} position closed`);
   };
 
   const strategyMap = useMemo(() => new Map(strategies.map(s => [s.id, s.name])), [strategies]);
@@ -91,14 +113,34 @@ export default function Portfolio() {
     <div className="space-y-6 animate-slide-in">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Portfolio</h1>
-        {playbookFilter && (
-          <button
-            onClick={() => setPlaybookFilter(null)}
-            className="text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer"
-          >
-            ✕ Clear playbook filter
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <AssignStrategyModal
+            strategies={strategies}
+            positions={[...positions, ...closedPositions]}
+            onStrategiesChange={setStrategies}
+            onPositionsChange={(updated) => {
+              const openUpdated = updated.filter(p => p.status === 'open' || p.status === undefined);
+              const closedUpdated = updated.filter(p => p.status === 'closed');
+              // Only update if there are matching items
+              setPositions(prev => prev.map(p => {
+                const u = openUpdated.find(x => x.id === p.id);
+                return u || p;
+              }));
+              setClosedPositions(prev => prev.map(p => {
+                const u = closedUpdated.find(x => x.id === p.id);
+                return u || p;
+              }));
+            }}
+          />
+          {playbookFilter && (
+            <button
+              onClick={() => setPlaybookFilter(null)}
+              className="text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer"
+            >
+              ✕ Clear filter
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -174,6 +216,7 @@ export default function Portfolio() {
                           key={pos.id}
                           pos={pos}
                           onUpdateSL={updateStopLoss}
+                          onExit={handleExit}
                           strategyName={pos.strategy_id ? strategyMap.get(pos.strategy_id) : undefined}
                           onStrategyClick={handlePlaybookClick}
                           showPlaybook={true}

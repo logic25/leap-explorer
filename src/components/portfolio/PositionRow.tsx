@@ -4,17 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import type { Position } from './types';
 
 interface PositionRowProps {
   pos: Position;
   onUpdateSL: (id: string, updates: Partial<Position>) => void;
+  onExit: (id: string) => void;
   strategyName?: string;
   onStrategyClick?: (strategyId: string) => void;
   showPlaybook?: boolean;
 }
 
-export function PositionRow({ pos, onUpdateSL, strategyName, onStrategyClick, showPlaybook }: PositionRowProps) {
+export function PositionRow({ pos, onUpdateSL, onExit, strategyName, onStrategyClick, showPlaybook }: PositionRowProps) {
   const [slPct, setSlPct] = useState(pos.stop_loss_pct ?? -35);
   const [profitTarget, setProfitTarget] = useState(pos.profit_target_pct ?? 50);
   const [trailingPct, setTrailingPct] = useState(pos.trailing_stop_pct ?? -20);
@@ -118,9 +123,31 @@ export function PositionRow({ pos, onUpdateSL, strategyName, onStrategyClick, sh
             <RefreshCw className="h-3 w-3" />Roll
           </Button>
         ) : (
-          <Button size="sm" variant="outline" className="text-xs gap-1">
-            <TrendingDown className="h-3 w-3" />Exit
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="outline" className="text-xs gap-1">
+                <TrendingDown className="h-3 w-3" />Exit
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Close {pos.ticker} position?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will mark your {pos.ticker} {pos.option_type} ${pos.strike} position as closed with a manual exit.
+                  Current P&L: {(pos.pnl || 0) >= 0 ? '+' : ''}${(pos.pnl || 0).toLocaleString()} ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => onExit(pos.id)}
+                  className="bg-bearish hover:bg-bearish/90"
+                >
+                  Close Position
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         )}
       </td>
     </tr>

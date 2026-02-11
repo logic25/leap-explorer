@@ -18,7 +18,8 @@ export function TradingViewChart({ ticker, className = '' }: TradingViewChartPro
     script.type = 'text/javascript';
     script.async = true;
     script.innerHTML = JSON.stringify({
-      autosize: true,
+      width: '100%',
+      height: '100%',
       symbol: ticker,
       interval: 'W',
       timezone: 'America/New_York',
@@ -58,8 +59,8 @@ export function TradingViewChart({ ticker, className = '' }: TradingViewChartPro
       </div>
       <div
         ref={containerRef}
-        className="tradingview-widget-container rounded-md overflow-hidden border border-border"
-        style={{ height: 'calc(95vh - 280px)', minHeight: 400 }}
+        className="tradingview-widget-container rounded-md overflow-hidden border border-border [&>div]:!h-full [&>iframe]:!h-full"
+        style={{ height: 420 }}
       />
     </div>
   );

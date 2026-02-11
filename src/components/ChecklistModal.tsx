@@ -22,7 +22,7 @@ export function ChecklistModal({ alert, open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl bg-card border-border h-[95vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl bg-card border-border max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <span className="font-mono text-lg">{alert.ticker}</span>

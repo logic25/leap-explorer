@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import type { ScannerType } from '@/lib/mock-data';
@@ -7,9 +7,52 @@ import type { ScannerAlert } from '@/lib/mock-data';
 import { ScannerBadge } from '@/components/ScannerBadge';
 import { ChecklistModal } from '@/components/ChecklistModal';
 import { RegimeIndicator } from '@/components/RegimeIndicator';
-import { Check, X, ChevronRight, Clock, RefreshCw, Loader2 } from 'lucide-react';
+import { Check, X, ChevronRight, Clock, RefreshCw, Loader2, Settings2, GripVertical, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
+
+type ColumnKey = 'ticker' | 'type' | 'price' | 'change' | 'rsi' | 'volRatio' | 'strike' | 'expiry' | 'delta' | 'dte' | 'oi' | 'spread' | 'ivPct' | 'askPrice' | 'checklist';
+
+interface ColumnDef {
+  key: ColumnKey;
+  label: string;
+  align: 'left' | 'right' | 'center';
+  render: (alert: ScannerAlert) => React.ReactNode;
+}
+
+const ALL_COLUMNS: ColumnDef[] = [
+  { key: 'ticker', label: 'Ticker', align: 'left', render: (a) => (
+    <><div className="font-mono font-semibold text-foreground">{a.ticker}</div><div className="text-xs text-muted-foreground">{a.name}</div></>
+  )},
+  { key: 'type', label: 'Type', align: 'left', render: (a) => <ScannerBadge type={a.scannerType} /> },
+  { key: 'price', label: 'Price', align: 'right', render: (a) => <span className="font-mono font-medium text-foreground">${a.price.toFixed(2)}</span> },
+  { key: 'change', label: 'Change', align: 'right', render: (a) => (
+    <span className={`font-mono font-medium ${a.changePct >= 0 ? 'text-bullish' : 'text-bearish'}`}>{a.changePct >= 0 ? '+' : ''}{a.changePct.toFixed(2)}%</span>
+  )},
+  { key: 'rsi', label: 'RSI', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.rsi}</span> },
+  { key: 'volRatio', label: 'Vol Ratio', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.avgVolume > 0 ? (a.volume / a.avgVolume).toFixed(2) : '—'}x</span> },
+  { key: 'strike', label: 'Strike', align: 'right', render: (a) => <span className="font-mono text-foreground">${a.suggestedStrike}</span> },
+  { key: 'expiry', label: 'Expiry', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.suggestedExpiry}</span> },
+  { key: 'delta', label: 'Delta', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.delta.toFixed(2)}</span> },
+  { key: 'dte', label: 'DTE', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.dte}</span> },
+  { key: 'oi', label: 'OI', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.openInterest.toLocaleString()}</span> },
+  { key: 'spread', label: 'Spread', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.bidAskSpread.toFixed(1)}%</span> },
+  { key: 'ivPct', label: 'IV %ile', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.ivPercentile}</span> },
+  { key: 'askPrice', label: 'Ask', align: 'right', render: (a) => <span className="font-mono text-foreground">${a.askPrice.toFixed(2)}</span> },
+  { key: 'checklist', label: 'Checklist', align: 'center', render: () => null }, // special rendering
+];
+
+const DEFAULT_VISIBLE: ColumnKey[] = ['ticker', 'type', 'price', 'change', 'rsi', 'volRatio', 'checklist'];
+const STORAGE_KEY = 'scanner-columns';
+
+function loadColumnPrefs(): ColumnKey[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return DEFAULT_VISIBLE;
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -19,6 +62,32 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [lastScan, setLastScan] = useState<string | null>(null);
+  const [visibleCols, setVisibleCols] = useState<ColumnKey[]>(loadColumnPrefs);
+
+  const toggleColumn = (key: ColumnKey) => {
+    setVisibleCols(prev => {
+      const next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const moveColumn = (key: ColumnKey, dir: -1 | 1) => {
+    setVisibleCols(prev => {
+      const idx = prev.indexOf(key);
+      if (idx < 0) return prev;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const activeColumns = visibleCols
+    .map(key => ALL_COLUMNS.find(c => c.key === key))
+    .filter(Boolean) as ColumnDef[];
 
   useEffect(() => {
     fetchAlerts();
@@ -125,6 +194,40 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Settings2 className="h-4 w-4" />
+                Columns
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-0" align="end">
+              <div className="p-3 border-b border-border">
+                <div className="text-sm font-semibold text-foreground">Visible Columns</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Toggle & reorder columns</div>
+              </div>
+              <div className="p-2 max-h-72 overflow-y-auto space-y-0.5">
+                {ALL_COLUMNS.map(col => {
+                  const isVisible = visibleCols.includes(col.key);
+                  const idx = visibleCols.indexOf(col.key);
+                  return (
+                    <div key={col.key} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent/50 text-sm">
+                      <button onClick={() => toggleColumn(col.key)} className="shrink-0">
+                        {isVisible ? <Eye className="h-3.5 w-3.5 text-primary" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
+                      </button>
+                      <span className={`flex-1 ${isVisible ? 'text-foreground' : 'text-muted-foreground'}`}>{col.label}</span>
+                      {isVisible && (
+                        <div className="flex gap-0.5">
+                          <button onClick={() => moveColumn(col.key, -1)} disabled={idx === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs px-1">↑</button>
+                          <button onClick={() => moveColumn(col.key, 1)} disabled={idx === visibleCols.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs px-1">↓</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button
             variant="outline"
             size="sm"
@@ -163,20 +266,18 @@ export default function Dashboard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-surface-2">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ticker</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Price</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Change</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden md:table-cell">RSI</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden lg:table-cell">Vol Ratio</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Checklist</th>
+                  {activeColumns.map(col => (
+                    <th key={col.key} className={`text-${col.align} px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap`}>
+                      {col.label}
+                    </th>
+                  ))}
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
                 {displayAlerts.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={activeColumns.length + 1} className="px-4 py-8 text-center text-muted-foreground">
                       No alerts today. Click "Run Scan Now" to scan your watchlist.
                     </td>
                   </tr>
@@ -187,36 +288,21 @@ export default function Dashboard() {
                       className="border-b border-border/50 hover:bg-accent/50 cursor-pointer transition-colors"
                       onClick={() => setSelected(alert)}
                     >
-                      <td className="px-4 py-3">
-                        <div className="font-mono font-semibold text-foreground">{alert.ticker}</div>
-                        <div className="text-xs text-muted-foreground">{alert.name}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <ScannerBadge type={alert.scannerType} />
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-medium text-foreground">
-                        ${alert.price.toFixed(2)}
-                      </td>
-                      <td className={`px-4 py-3 text-right font-mono font-medium ${alert.changePct >= 0 ? 'text-bullish' : 'text-bearish'}`}>
-                        {alert.changePct >= 0 ? '+' : ''}{alert.changePct.toFixed(2)}%
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-foreground hidden md:table-cell">
-                        {alert.rsi}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-foreground hidden lg:table-cell">
-                        {alert.avgVolume > 0 ? (alert.volume / alert.avgVolume).toFixed(2) : '—'}x
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center gap-1 text-xs">
-                          {passedCount(alert) === totalCount(alert) ? (
-                            <Check className="h-4 w-4 text-bullish" />
-                          ) : (
-                            <span className="text-muted-foreground">
-                              {passedCount(alert)}/{totalCount(alert)}
+                      {activeColumns.map(col => (
+                        <td key={col.key} className={`px-4 py-3 text-${col.align}`}>
+                          {col.key === 'checklist' ? (
+                            <span className="inline-flex items-center gap-1 text-xs">
+                              {passedCount(alert) === totalCount(alert) ? (
+                                <Check className="h-4 w-4 text-bullish" />
+                              ) : (
+                                <span className="text-muted-foreground">
+                                  {passedCount(alert)}/{totalCount(alert)}
+                                </span>
+                              )}
                             </span>
-                          )}
-                        </span>
-                      </td>
+                          ) : col.render(alert)}
+                        </td>
+                      ))}
                       <td className="px-4 py-3">
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </td>

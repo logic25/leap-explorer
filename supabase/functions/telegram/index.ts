@@ -95,7 +95,43 @@ Deno.serve(async (req) => {
       return handleWebhook(body.update, TELEGRAM_BOT_TOKEN, supabase);
     }
 
-    // Action 4: Register webhook URL
+    // Action 4: Send a test message directly
+    if (action === "send_test") {
+      if (!user_id) {
+        return new Response(JSON.stringify({ error: "user_id required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("telegram_chat_id")
+        .eq("id", user_id)
+        .single();
+
+      if (!prof?.telegram_chat_id) {
+        return new Response(JSON.stringify({ error: "Telegram not linked" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      await sendTelegramMessage(
+        TELEGRAM_BOT_TOKEN,
+        prof.telegram_chat_id,
+        "🧪 *Test Alert — LEAPS Trader*\n\n" +
+        "🔵 *NVDA* — Value Zone\n   $135.20 | RSI 42 | Δ0.58 | 9/12 ✓\n   Strike: $130 | Jan 2028\n\n" +
+        "🟢 *MSFT* — MegaRun\n   $420.50 | RSI 61 | Δ0.55 | 10/12 ✓\n   Strike: $400 | Jan 2028\n\n" +
+        "_This is a test notification. Reply /approve TICKER to try the flow._"
+      );
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Action 5: Register webhook URL
     if (action === "setup_webhook") {
       const SUPABASE_FUNC_URL = `${SUPABASE_URL}/functions/v1/telegram`;
       const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`, {

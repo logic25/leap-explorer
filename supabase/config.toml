@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.telegram]
 verify_jwt = false
+
+[functions.parse-strategy]
+verify_jwt = false

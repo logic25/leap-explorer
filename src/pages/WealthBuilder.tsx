@@ -129,6 +129,14 @@ export default function WealthBuilder() {
     return (Math.pow(goal.target_value / goal.starting_capital, 1 / goal.time_horizon_years) - 1) * 100;
   }, [goal]);
 
+  const fmt = (n: number) => {
+    if (n >= 1e12) return `$${(n / 1e12).toFixed(1)}T`;
+    if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+    if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+    return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  };
+  const fmtPct = (n: number) => n > 9999 ? '>9,999%' : `${n.toFixed(1)}%`;
+
   const currentValue = goal.starting_capital + totalPnl;
   
   // Use the earliest closed_at date as the real start of trading history
@@ -152,7 +160,7 @@ export default function WealthBuilder() {
     : 0;
   const paceStatus = currentCagr >= requiredCagr
     ? { label: 'On pace', color: 'text-bullish', bg: 'bg-bullish/10 border-bullish/30' }
-    : { label: `Behind by ${(requiredCagr - currentCagr).toFixed(1)}%`, color: 'text-bearish', bg: 'bg-bearish/10 border-bearish/30' };
+    : { label: `Behind by ${fmtPct(requiredCagr - currentCagr)}`, color: 'text-bearish', bg: 'bg-bearish/10 border-bearish/30' };
 
   // Combined chart data — single chart with all scenario lines
   const combinedChartData = useMemo(() => {
@@ -236,7 +244,6 @@ export default function WealthBuilder() {
     setLoadingAi(false);
   };
 
-  const fmt = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
   if (loading) {
     return (
@@ -312,8 +319,8 @@ export default function WealthBuilder() {
       {/* Key Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <MetricCard label="Current Value" value={fmt(currentValue)} icon={<DollarSign className="h-4 w-4" />} tooltip={METRIC_TOOLTIPS['Current Value']} />
-        <MetricCard label="Current CAGR" value={`${currentCagr.toFixed(1)}%`} icon={<TrendingUp className="h-4 w-4" />} color={currentCagr >= requiredCagr ? 'text-bullish' : 'text-bearish'} tooltip={METRIC_TOOLTIPS['Current CAGR']} />
-        <MetricCard label="Remaining CAGR" value={`${remainingCagr.toFixed(1)}%`} icon={<TrendingDown className="h-4 w-4" />} tooltip={METRIC_TOOLTIPS['Remaining CAGR']} />
+        <MetricCard label="Current CAGR" value={fmtPct(currentCagr)} icon={<TrendingUp className="h-4 w-4" />} color={currentCagr >= requiredCagr ? 'text-bullish' : 'text-bearish'} tooltip={METRIC_TOOLTIPS['Current CAGR']} />
+        <MetricCard label="Remaining CAGR" value={fmtPct(remainingCagr)} icon={<TrendingDown className="h-4 w-4" />} tooltip={METRIC_TOOLTIPS['Remaining CAGR']} />
         <MetricCard label="Projected End" value={fmt(projectedEndValue)} icon={<Target className="h-4 w-4" />} color={projectedEndValue >= goal.target_value ? 'text-bullish' : 'text-bearish'} tooltip={METRIC_TOOLTIPS['Projected End']} />
       </div>
 

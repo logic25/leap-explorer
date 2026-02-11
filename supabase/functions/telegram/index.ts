@@ -123,7 +123,9 @@ Deno.serve(async (req) => {
         "🧪 *Test Alert — LEAPS Trader*\n\n" +
         "🔵 *NVDA* — Value Zone\n   $135.20 | RSI 42 | Δ0.58 | 9/12 ✓\n   Strike: $130 | Jan 2028\n\n" +
         "🟢 *MSFT* — MegaRun\n   $420.50 | RSI 61 | Δ0.55 | 10/12 ✓\n   Strike: $400 | Jan 2028\n\n" +
-        "_This is a test notification. Reply /approve TICKER to try the flow._"
+        "_This is a test notification._\n\n" +
+        "_/approve TICKER — AI price suggestion_\n" +
+        "_/reject TICKER \\[reason\\] — pass on it_"
       );
 
       return new Response(JSON.stringify({ success: true }), {

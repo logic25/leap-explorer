@@ -348,9 +348,64 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
   }
 
   if (text === "/help") {
-    await sendTelegramMessage(token, chatId, "*LEAPS Trader Bot*\n\nCommands:\n/start — Welcome & Chat ID\n/approve TICKER — AI suggests limit price\n/confirm TICKER — Execute at AI price\n/approve TICKER 41.20 — Override price\n/reject TICKER [reason]\n/status — View positions\n/help — This message");
+    await sendTelegramMessage(token, chatId, "*LEAPS Trader Bot*\n\nCommands:\n/start — Welcome & Chat ID\n/approve TICKER — AI suggests limit price\n/confirm TICKER — Execute at AI price\n/approve TICKER 41.20 — Override price\n/reject TICKER [reason]\n/status — View positions\n/help — This message\n\nOr just ask a question in plain English!");
   } else {
-    await sendTelegramMessage(token, chatId, "Unknown command. Try /help");
+    // Forward unrecognized messages to Gemini chat AI
+    try {
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+      const chatResponse = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: text }],
+        }),
+      });
+
+      if (chatResponse.ok && chatResponse.body) {
+        // Read SSE stream and collect response
+        const reader = chatResponse.body.getReader();
+        const decoder = new TextDecoder();
+        let aiResponse = "";
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          let newlineIdx: number;
+          while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+            let line = buffer.slice(0, newlineIdx);
+            buffer = buffer.slice(newlineIdx + 1);
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+            if (!line.startsWith("data: ")) continue;
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) aiResponse += content;
+            } catch { /* skip partial */ }
+          }
+        }
+
+        if (aiResponse.trim()) {
+          // Telegram has 4096 char limit
+          const truncated = aiResponse.length > 4000 ? aiResponse.slice(0, 4000) + "..." : aiResponse;
+          await sendTelegramMessage(token, chatId, truncated);
+        } else {
+          await sendTelegramMessage(token, chatId, "🤔 I couldn't generate a response. Try /help for commands.");
+        }
+      } else {
+        await sendTelegramMessage(token, chatId, "⚠️ AI is temporarily unavailable. Try /help for commands.");
+      }
+    } catch (e) {
+      console.error("NL chat forwarding failed:", e);
+      await sendTelegramMessage(token, chatId, "⚠️ AI error. Try /help for available commands.");
+    }
   }
 
   return new Response(JSON.stringify({ ok: true }), {

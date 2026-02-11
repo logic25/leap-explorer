@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 
-type ColumnKey = 'ticker' | 'type' | 'price' | 'change' | 'rsi' | 'volRatio' | 'strike' | 'expiry' | 'delta' | 'dte' | 'oi' | 'spread' | 'ivPct' | 'askPrice' | 'checklist';
+type ColumnKey = 'ticker' | 'type' | 'price' | 'change' | 'rsi' | 'volRatio' | 'strike' | 'expiry' | 'delta' | 'theta' | 'vega' | 'dte' | 'oi' | 'spread' | 'ivPct' | 'ivHvRatio' | 'askPrice' | 'volOiRatio' | 'chainQuality' | 'checklist';
 
 interface ColumnDef {
   key: ColumnKey;
@@ -34,16 +34,47 @@ const ALL_COLUMNS: ColumnDef[] = [
   { key: 'volRatio', label: 'Vol Ratio', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.avgVolume > 0 ? (a.volume / a.avgVolume).toFixed(2) : '—'}x</span> },
   { key: 'strike', label: 'Strike', align: 'right', render: (a) => <span className="font-mono text-foreground">${a.suggestedStrike}</span> },
   { key: 'expiry', label: 'Expiry', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.suggestedExpiry}</span> },
-  { key: 'delta', label: 'Delta', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.delta.toFixed(2)}</span> },
-  { key: 'dte', label: 'DTE', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.dte}</span> },
-  { key: 'oi', label: 'OI', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.openInterest.toLocaleString()}</span> },
-  { key: 'spread', label: 'Spread', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.bidAskSpread.toFixed(1)}%</span> },
+  { key: 'delta', label: 'Δ Delta', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.delta.toFixed(2)}</span> },
+  { key: 'theta', label: 'Θ Theta', align: 'right', render: (a) => (
+    <span className={`font-mono ${a.theta < -0.05 ? 'text-warning' : 'text-foreground'}`}>{a.theta.toFixed(3)}</span>
+  )},
+  { key: 'vega', label: 'V Vega', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.vega.toFixed(2)}</span> },
+  { key: 'dte', label: 'DTE', align: 'right', render: (a) => (
+    <span className={`font-mono ${a.dte < 90 ? 'text-bearish font-semibold' : 'text-foreground'}`}>
+      {a.dte}{a.dte < 90 ? ' ⚠' : ''}
+    </span>
+  )},
+  { key: 'oi', label: 'OI', align: 'right', render: (a) => (
+    <span className={`font-mono ${a.openInterest < 1000 ? 'text-bearish' : 'text-foreground'}`}>
+      {a.openInterest.toLocaleString()}{a.openInterest < 1000 ? ' ⚠' : ''}
+    </span>
+  )},
+  { key: 'spread', label: 'Spread', align: 'right', render: (a) => (
+    <span className={`font-mono ${a.bidAskSpread > 5 ? 'text-bearish font-semibold' : a.bidAskSpread > 2 ? 'text-warning' : 'text-foreground'}`}>
+      {a.bidAskSpread.toFixed(1)}%{a.bidAskSpread > 5 ? ' ⚠' : ''}
+    </span>
+  )},
   { key: 'ivPct', label: 'IV %ile', align: 'right', render: (a) => <span className="font-mono text-foreground">{a.ivPercentile}</span> },
+  { key: 'ivHvRatio', label: 'IV/HV', align: 'right', render: (a) => (
+    <span className={`font-mono ${(a.ivHvRatio || 0) > 1.3 ? 'text-warning' : 'text-foreground'}`}>
+      {a.ivHvRatio != null ? a.ivHvRatio.toFixed(2) : '—'}{(a.ivHvRatio || 0) > 1.3 ? ' ⚠' : ''}
+    </span>
+  )},
   { key: 'askPrice', label: 'Ask', align: 'right', render: (a) => <span className="font-mono text-foreground">${a.askPrice.toFixed(2)}</span> },
-  { key: 'checklist', label: 'Checklist', align: 'center', render: () => null }, // special rendering
+  { key: 'volOiRatio', label: 'Vol/OI', align: 'right', render: (a) => (
+    <span className={`font-mono ${a.unusualActivity ? 'text-warning font-semibold' : 'text-foreground'}`}>
+      {a.volumeOiRatio != null ? a.volumeOiRatio.toFixed(2) : '—'}{a.unusualActivity ? ' 🔥' : ''}
+    </span>
+  )},
+  { key: 'chainQuality', label: 'Quality', align: 'center', render: (a) => {
+    const score = a.chainQualityScore || 0;
+    const color = score >= 80 ? 'text-bullish' : score >= 50 ? 'text-warning' : 'text-bearish';
+    return <span className={`font-mono font-semibold ${color}`}>{score}</span>;
+  }},
+  { key: 'checklist', label: 'Checklist', align: 'center', render: () => null },
 ];
 
-const DEFAULT_VISIBLE: ColumnKey[] = ['ticker', 'type', 'price', 'change', 'rsi', 'volRatio', 'checklist'];
+const DEFAULT_VISIBLE: ColumnKey[] = ['ticker', 'type', 'price', 'change', 'oi', 'spread', 'ivPct', 'ivHvRatio', 'delta', 'chainQuality', 'checklist'];
 const STORAGE_KEY = 'scanner-columns';
 
 function loadColumnPrefs(): ColumnKey[] {
@@ -125,14 +156,22 @@ export default function Dashboard() {
         suggestedStrike: Number(row.suggested_strike) || 0,
         suggestedExpiry: row.suggested_expiry || '',
         delta: Number(row.delta) || 0,
+        theta: Number((row as any).theta) || 0,
+        vega: Number((row as any).vega) || 0,
         dte: row.dte || 0,
         openInterest: row.open_interest || 0,
         bidAskSpread: Number(row.bid_ask_spread) || 0,
         ivPercentile: Number(row.iv_percentile) || 0,
+        ivRank: Number(row.iv_rank) || undefined,
+        ivHvRatio: Number(row.iv_hv_ratio) || undefined,
         askPrice: Number(row.ask_price) || 0,
         historicalLow: Number(row.historical_low) || 0,
+        volumeOiRatio: Number((row as any).volume_oi_ratio) || undefined,
+        unusualActivity: (row as any).unusual_activity || false,
+        slippageEst: Number((row as any).slippage_est) || undefined,
+        chainQualityScore: Number((row as any).chain_quality_score) || undefined,
         checklist: Array.isArray(row.checklist)
-          ? (row.checklist as any[]).map((c: any) => ({ label: c.label, passed: c.passed }))
+          ? (row.checklist as any[]).map((c: any) => ({ label: c.label, passed: c.passed, category: c.category }))
           : [],
         timestamp: row.created_at,
       }));

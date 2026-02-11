@@ -84,8 +84,8 @@ export default function Portfolio() {
     );
   }
 
-  const openHeaders = ['Ticker', ...(strategies.length > 0 ? ['Playbook'] : []), 'Strike / Exp', 'Qty', 'Avg Cost', 'Current', 'P&L', 'Stop Loss', 'Delta', 'DTE', 'Alloc %', 'Action'];
-  const closedHeaders = ['Ticker', ...(strategies.length > 0 ? ['Playbook'] : []), 'Strike / Exp', 'Entry', 'Exit', 'P&L', 'Reason', 'Closed'];
+  const openHeaders = ['Ticker', 'Playbook', 'Strike / Exp', 'Qty', 'Avg Cost', 'Current', 'P&L', 'Stop Loss', 'Delta', 'DTE', 'Alloc %', 'Action'];
+  const closedHeaders = ['Ticker', 'Playbook', 'Strike / Exp', 'Entry', 'Exit', 'P&L', 'Reason', 'Closed'];
 
   return (
     <div className="space-y-6 animate-slide-in">
@@ -176,7 +176,7 @@ export default function Portfolio() {
                           onUpdateSL={updateStopLoss}
                           strategyName={pos.strategy_id ? strategyMap.get(pos.strategy_id) : undefined}
                           onStrategyClick={handlePlaybookClick}
-                          showPlaybook={strategies.length > 0}
+                          showPlaybook={true}
                         />
                       ))}
                     </tbody>
@@ -242,8 +242,7 @@ export default function Portfolio() {
                           <div className="font-mono font-semibold text-foreground">{pos.ticker}</div>
                           <div className="text-xs text-muted-foreground">{pos.option_type}</div>
                         </td>
-                        {strategies.length > 0 && (
-                          <td className="px-4 py-3">
+                        <td className="px-4 py-3">
                             {pos.strategy_id && strategyMap.get(pos.strategy_id) ? (
                               <button
                                 onClick={() => handlePlaybookClick(pos.strategy_id!)}
@@ -254,8 +253,7 @@ export default function Portfolio() {
                             ) : (
                               <span className="text-xs text-muted-foreground">—</span>
                             )}
-                          </td>
-                        )}
+                        </td>
                         <td className="px-4 py-3 font-mono text-foreground">
                           <div>${pos.strike}</div>
                           <div className="text-xs text-muted-foreground">{pos.expiry}</div>

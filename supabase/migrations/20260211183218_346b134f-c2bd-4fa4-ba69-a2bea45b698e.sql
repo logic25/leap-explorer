@@ -1,0 +1,1 @@
+ALTER TABLE public.scanner_alerts DROP CONSTRAINT scanner_alerts_confluence_score_check;

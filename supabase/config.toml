@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.parse-strategy]
 verify_jwt = false
+
+[functions.check-rolls]
+verify_jwt = false

@@ -276,9 +276,13 @@ export default function WealthBuilder() {
             <div className="relative mt-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
               <Input
-                type="number"
-                value={goal.starting_capital}
-                onChange={e => setGoal(prev => ({ ...prev, starting_capital: Number(e.target.value) }))}
+                type="text"
+                inputMode="numeric"
+                value={goal.starting_capital || ''}
+                onChange={e => {
+                  const raw = e.target.value.replace(/[^0-9]/g, '');
+                  setGoal(prev => ({ ...prev, starting_capital: raw === '' ? 0 : Number(raw) }));
+                }}
                 className="pl-7"
               />
             </div>
@@ -288,9 +292,13 @@ export default function WealthBuilder() {
             <div className="relative mt-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
               <Input
-                type="number"
-                value={goal.target_value}
-                onChange={e => setGoal(prev => ({ ...prev, target_value: Number(e.target.value) }))}
+                type="text"
+                inputMode="numeric"
+                value={goal.target_value || ''}
+                onChange={e => {
+                  const raw = e.target.value.replace(/[^0-9]/g, '');
+                  setGoal(prev => ({ ...prev, target_value: raw === '' ? 0 : Number(raw) }));
+                }}
                 className="pl-7"
               />
             </div>
@@ -298,9 +306,13 @@ export default function WealthBuilder() {
           <div>
             <Label className="text-xs text-muted-foreground">Time Horizon (years)</Label>
             <Input
-              type="number"
-              value={goal.time_horizon_years}
-              onChange={e => setGoal(prev => ({ ...prev, time_horizon_years: Number(e.target.value) }))}
+              type="text"
+              inputMode="numeric"
+              value={goal.time_horizon_years || ''}
+              onChange={e => {
+                const raw = e.target.value.replace(/[^0-9]/g, '');
+                setGoal(prev => ({ ...prev, time_horizon_years: raw === '' ? 0 : Number(raw) }));
+              }}
               className="mt-1"
             />
           </div>

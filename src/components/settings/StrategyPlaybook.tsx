@@ -38,11 +38,11 @@ interface StrategyPlaybookProps {
   userId: string;
 }
 
-const SCANNER_TYPES = ['Value Zone', 'Fallen Angel', 'MegaRun'];
+const BUILT_IN_SCANNER_TYPES = ['Value Zone', 'Fallen Angel', 'MegaRun'];
 
 const DEFAULT_STRATEGY: Strategy = {
   name: '',
-  scanner_type: SCANNER_TYPES[0],
+  scanner_type: '',
   description: '',
   conditions: {},
   enabled: true,
@@ -59,6 +59,14 @@ export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<Strategy>({ ...DEFAULT_STRATEGY });
   const [tickerInput, setTickerInput] = useState('');
+  const [customTypeInput, setCustomTypeInput] = useState('');
+  const [showCustomType, setShowCustomType] = useState(false);
+
+  // Derive all scanner types from saved strategies + built-ins
+  const allScannerTypes = Array.from(new Set([
+    ...BUILT_IN_SCANNER_TYPES,
+    ...strategies.map(s => s.scanner_type).filter(Boolean),
+  ]));
 
   useEffect(() => {
     loadStrategies();
@@ -78,13 +86,19 @@ export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
     setEditIndex(null);
     setDraft({ ...DEFAULT_STRATEGY });
     setTickerInput('');
+    setCustomTypeInput('');
+    setShowCustomType(false);
     setModalOpen(true);
   };
 
   const openEditModal = (index: number) => {
     setEditIndex(index);
-    setDraft({ ...strategies[index], tickers: strategies[index].tickers || [] });
+    const s = strategies[index];
+    setDraft({ ...s, tickers: s.tickers || [] });
     setTickerInput('');
+    const isCustom = !BUILT_IN_SCANNER_TYPES.includes(s.scanner_type);
+    setShowCustomType(isCustom);
+    setCustomTypeInput(isCustom ? s.scanner_type : '');
     setModalOpen(true);
   };
 
@@ -149,6 +163,10 @@ export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
   const saveStrategy = async () => {
     if (!draft.name.trim()) {
       toast({ variant: 'destructive', title: 'Name required' });
+      return;
+    }
+    if (!draft.scanner_type.trim()) {
+      toast({ variant: 'destructive', title: 'Scanner type required' });
       return;
     }
     setSaving(true);
@@ -282,21 +300,51 @@ export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
                   className="mt-1"
                 />
               </div>
-              <div className="w-40">
+              <div className="w-48">
                 <Label className="text-xs text-muted-foreground">Scanner Type</Label>
-                <Select
-                  value={draft.scanner_type}
-                  onValueChange={v => setDraft(prev => ({ ...prev, scanner_type: v }))}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SCANNER_TYPES.map(t => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {showCustomType ? (
+                  <div className="flex gap-1 mt-1">
+                    <Input
+                      value={customTypeInput}
+                      onChange={e => {
+                        setCustomTypeInput(e.target.value);
+                        setDraft(prev => ({ ...prev, scanner_type: e.target.value }));
+                      }}
+                      placeholder="Custom type name"
+                    />
+                    <Button type="button" variant="ghost" size="sm" onClick={() => {
+                      setShowCustomType(false);
+                      setDraft(prev => ({ ...prev, scanner_type: allScannerTypes[0] || '' }));
+                    }} className="text-xs shrink-0">
+                      ← Back
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    value={draft.scanner_type}
+                    onValueChange={v => {
+                      if (v === '__custom__') {
+                        setShowCustomType(true);
+                        setCustomTypeInput('');
+                        setDraft(prev => ({ ...prev, scanner_type: '' }));
+                      } else {
+                        setDraft(prev => ({ ...prev, scanner_type: v }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allScannerTypes.map(t => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                      <SelectItem value="__custom__" className="text-primary font-medium">
+                        + Custom Type…
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
 

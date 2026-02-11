@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { useTheme } from 'next-themes';
 import {
   LayoutDashboard,
   Briefcase,
@@ -12,6 +13,8 @@ import {
   X,
   ScrollText,
   LogOut,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { RegimeIndicator } from './RegimeIndicator';
 import { mockRegime } from '@/lib/mock-data';
@@ -30,6 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const { signOut, user } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -91,14 +95,27 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {/* Sign out */}
-        <button
-          onClick={signOut}
-          className="flex items-center gap-2 px-3 py-2 mx-2 mb-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-        >
-          <LogOut className="h-3.5 w-3.5 shrink-0" />
-          {!collapsed && <span>Sign Out</span>}
-        </button>
+        {/* Theme toggle + Sign out */}
+        <div className="px-2 pb-2 space-y-1">
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="flex items-center gap-2 px-3 py-2 w-full rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            {theme === 'dark' ? (
+              <Sun className="h-3.5 w-3.5 shrink-0" />
+            ) : (
+              <Moon className="h-3.5 w-3.5 shrink-0" />
+            )}
+            {!collapsed && <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>}
+          </button>
+          <button
+            onClick={signOut}
+            className="flex items-center gap-2 px-3 py-2 w-full rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <LogOut className="h-3.5 w-3.5 shrink-0" />
+            {!collapsed && <span>Sign Out</span>}
+          </button>
+        </div>
 
         {/* Collapse */}
         <button

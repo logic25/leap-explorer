@@ -1,21 +1,116 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Eye, EyeOff, Save, Key, Server, List } from 'lucide-react';
+import { Eye, EyeOff, Save, Key, Server, List, Send, CheckCircle, Loader2 } from 'lucide-react';
 import { STOCK_LIST } from '@/lib/mock-data';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Settings() {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [polygonKey, setPolygonKey] = useState('');
   const [alpacaKey, setAlpacaKey] = useState('');
   const [alpacaSecret, setAlpacaSecret] = useState('');
   const [liveMode, setLiveMode] = useState(false);
   const [showKeys, setShowKeys] = useState(false);
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [telegramLinked, setTelegramLinked] = useState(false);
+  const [linkingTelegram, setLinkingTelegram] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('profiles')
+        .select('telegram_chat_id, trading_mode')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.telegram_chat_id) {
+            setTelegramChatId(data.telegram_chat_id);
+            setTelegramLinked(true);
+          }
+          if (data?.trading_mode === 'live') {
+            setLiveMode(true);
+          }
+        });
+    }
+  }, [user]);
+
+  const linkTelegram = async () => {
+    if (!user || !telegramChatId.trim()) return;
+    setLinkingTelegram(true);
+    try {
+      const { error } = await supabase.functions.invoke('telegram', {
+        body: { action: 'link', user_id: user.id, chat_id: telegramChatId.trim() },
+      });
+      if (error) throw error;
+      setTelegramLinked(true);
+      toast({ title: 'Telegram linked!', description: 'Check your Telegram for a confirmation message.' });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Failed to link', description: err.message });
+    }
+    setLinkingTelegram(false);
+  };
 
   return (
     <div className="max-w-2xl space-y-8 animate-slide-in">
       <h1 className="text-xl font-semibold text-foreground">Settings</h1>
+
+      {/* Telegram */}
+      <section className="bg-card rounded-lg border border-border p-5 space-y-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Send className="h-4 w-4 text-primary" />
+          Telegram Alerts
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Link your Telegram to receive daily scan alerts and approve trades via reply.
+        </p>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">
+            Telegram Chat ID
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Message <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@userinfobot</a> on Telegram to get your Chat ID.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              value={telegramChatId}
+              onChange={e => setTelegramChatId(e.target.value)}
+              placeholder="e.g. 123456789"
+              className="bg-surface-2 border-border"
+              disabled={telegramLinked}
+            />
+            {telegramLinked ? (
+              <Button variant="outline" disabled className="gap-2 shrink-0">
+                <CheckCircle className="h-4 w-4 text-bullish" />
+                Linked
+              </Button>
+            ) : (
+              <Button onClick={linkTelegram} disabled={linkingTelegram || !telegramChatId.trim()} className="gap-2 shrink-0">
+                {linkingTelegram ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Link
+              </Button>
+            )}
+          </div>
+          {telegramLinked && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground"
+              onClick={() => {
+                setTelegramLinked(false);
+                setTelegramChatId('');
+              }}
+            >
+              Unlink & change
+            </Button>
+          )}
+        </div>
+      </section>
 
       {/* API Keys */}
       <section className="bg-card rounded-lg border border-border p-5 space-y-5">

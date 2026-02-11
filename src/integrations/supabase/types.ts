@@ -84,6 +84,7 @@ export type Database = {
           qty: number
           status: string
           stop_loss_pct: number | null
+          strategy_id: string | null
           strike: number
           suggestion: string | null
           suggestion_type: string | null
@@ -114,6 +115,7 @@ export type Database = {
           qty?: number
           status?: string
           stop_loss_pct?: number | null
+          strategy_id?: string | null
           strike: number
           suggestion?: string | null
           suggestion_type?: string | null
@@ -144,6 +146,7 @@ export type Database = {
           qty?: number
           status?: string
           stop_loss_pct?: number | null
+          strategy_id?: string | null
           strike?: number
           suggestion?: string | null
           suggestion_type?: string | null
@@ -153,7 +156,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "positions_strategy_id_fkey"
+            columns: ["strategy_id"]
+            isOneToOne: false
+            referencedRelation: "strategies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

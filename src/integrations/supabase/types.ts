@@ -66,66 +66,90 @@ export type Database = {
         Row: {
           allocation: number | null
           avg_cost: number | null
+          closed_at: string | null
           created_at: string
           current_price: number | null
           delta: number | null
           dte: number | null
+          exit_price: number | null
+          exit_reason: string | null
           expiry: string | null
+          highest_pnl_pct: number | null
           id: string
           name: string | null
           option_type: string
           pnl: number | null
           pnl_pct: number | null
+          profit_target_pct: number | null
           qty: number
           status: string
+          stop_loss_pct: number | null
           strike: number
           suggestion: string | null
           suggestion_type: string | null
           ticker: string
+          trailing_active: boolean
+          trailing_stop_pct: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
           allocation?: number | null
           avg_cost?: number | null
+          closed_at?: string | null
           created_at?: string
           current_price?: number | null
           delta?: number | null
           dte?: number | null
+          exit_price?: number | null
+          exit_reason?: string | null
           expiry?: string | null
+          highest_pnl_pct?: number | null
           id?: string
           name?: string | null
           option_type?: string
           pnl?: number | null
           pnl_pct?: number | null
+          profit_target_pct?: number | null
           qty?: number
           status?: string
+          stop_loss_pct?: number | null
           strike: number
           suggestion?: string | null
           suggestion_type?: string | null
           ticker: string
+          trailing_active?: boolean
+          trailing_stop_pct?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
           allocation?: number | null
           avg_cost?: number | null
+          closed_at?: string | null
           created_at?: string
           current_price?: number | null
           delta?: number | null
           dte?: number | null
+          exit_price?: number | null
+          exit_reason?: string | null
           expiry?: string | null
+          highest_pnl_pct?: number | null
           id?: string
           name?: string | null
           option_type?: string
           pnl?: number | null
           pnl_pct?: number | null
+          profit_target_pct?: number | null
           qty?: number
           status?: string
+          stop_loss_pct?: number | null
           strike?: number
           suggestion?: string | null
           suggestion_type?: string | null
           ticker?: string
+          trailing_active?: boolean
+          trailing_stop_pct?: number | null
           updated_at?: string
           user_id?: string
         }

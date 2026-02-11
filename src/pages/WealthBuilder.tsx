@@ -21,7 +21,7 @@ const METRIC_TOOLTIPS: Record<string, string> = {
   'Current Value': 'Starting capital plus total realized P&L from all closed trades.',
   'Current CAGR': 'Your annualized return based on actual trading performance so far.',
   'Remaining CAGR': 'The annualized return you need from today to hit your target on time.',
-  'Projected End': 'Where you\'ll end up if your current CAGR continues for the full horizon.',
+  'Projected End': 'Where you\'ll end up based on your forecast CAGR slider over the remaining horizon.',
 };
 
 export default function WealthBuilder() {
@@ -165,8 +165,8 @@ export default function WealthBuilder() {
     ? (Math.pow(Math.max(currentValue, 0.01) / goal.starting_capital, 1 / elapsedYears) - 1) * 100
     : 0;
   const remainingYears = Math.max(0.1, goal.time_horizon_years - elapsedYears);
-  const cappedCagr = Math.min(currentCagr, 999);
-  const projectedEndValue = currentValue * Math.pow(1 + cappedCagr / 100, remainingYears);
+  // Projected end uses the forecast base case (matching the chart), not historical CAGR
+  const projectedEndValue = currentValue * Math.pow(1 + forecastCagr / 100, remainingYears);
   const remainingCagr = currentValue > 0
     ? (Math.pow(goal.target_value / currentValue, 1 / remainingYears) - 1) * 100
     : 0;

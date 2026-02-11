@@ -10,14 +10,18 @@ import {
   Activity,
   Menu,
   X,
+  ScrollText,
+  LogOut,
 } from 'lucide-react';
 import { RegimeIndicator } from './RegimeIndicator';
 import { mockRegime } from '@/lib/mock-data';
+import { useAuth } from '@/hooks/useAuth';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Scanner' },
   { to: '/portfolio', icon: Briefcase, label: 'Portfolio' },
   { to: '/backtester', icon: BarChart3, label: 'Backtester' },
+  { to: '/audit', icon: ScrollText, label: 'Audit Log' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -25,6 +29,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { signOut, user } = useAuth();
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -85,6 +90,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <RegimeIndicator regime={mockRegime} />
           </div>
         )}
+
+        {/* Sign out */}
+        <button
+          onClick={signOut}
+          className="flex items-center gap-2 px-3 py-2 mx-2 mb-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        >
+          <LogOut className="h-3.5 w-3.5 shrink-0" />
+          {!collapsed && <span>Sign Out</span>}
+        </button>
 
         {/* Collapse */}
         <button

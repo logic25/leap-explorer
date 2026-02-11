@@ -14,7 +14,240 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_log: {
+        Row: {
+          action_type: string
+          created_at: string
+          details: Json | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      positions: {
+        Row: {
+          allocation: number | null
+          avg_cost: number | null
+          created_at: string
+          current_price: number | null
+          delta: number | null
+          dte: number | null
+          expiry: string | null
+          id: string
+          name: string | null
+          option_type: string
+          pnl: number | null
+          pnl_pct: number | null
+          qty: number
+          status: string
+          strike: number
+          suggestion: string | null
+          suggestion_type: string | null
+          ticker: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allocation?: number | null
+          avg_cost?: number | null
+          created_at?: string
+          current_price?: number | null
+          delta?: number | null
+          dte?: number | null
+          expiry?: string | null
+          id?: string
+          name?: string | null
+          option_type?: string
+          pnl?: number | null
+          pnl_pct?: number | null
+          qty?: number
+          status?: string
+          strike: number
+          suggestion?: string | null
+          suggestion_type?: string | null
+          ticker: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allocation?: number | null
+          avg_cost?: number | null
+          created_at?: string
+          current_price?: number | null
+          delta?: number | null
+          dte?: number | null
+          expiry?: string | null
+          id?: string
+          name?: string | null
+          option_type?: string
+          pnl?: number | null
+          pnl_pct?: number | null
+          qty?: number
+          status?: string
+          strike?: number
+          suggestion?: string | null
+          suggestion_type?: string | null
+          ticker?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          stock_watchlist: Json
+          trading_mode: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id: string
+          stock_watchlist?: Json
+          trading_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          stock_watchlist?: Json
+          trading_mode?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      scanner_alerts: {
+        Row: {
+          all_passed: boolean
+          ask_price: number | null
+          avg_volume: number | null
+          bid_ask_spread: number | null
+          change_pct: number | null
+          checklist: Json
+          confluence_score: string | null
+          created_at: string
+          delta: number | null
+          dte: number | null
+          historical_low: number | null
+          id: string
+          iv_hv_ratio: number | null
+          iv_percentile: number | null
+          iv_rank: number | null
+          name: string | null
+          open_interest: number | null
+          price: number | null
+          rsi: number | null
+          scan_date: string
+          scanner_type: string
+          suggested_expiry: string | null
+          suggested_strike: number | null
+          ticker: string
+          user_id: string
+          volume: number | null
+        }
+        Insert: {
+          all_passed?: boolean
+          ask_price?: number | null
+          avg_volume?: number | null
+          bid_ask_spread?: number | null
+          change_pct?: number | null
+          checklist?: Json
+          confluence_score?: string | null
+          created_at?: string
+          delta?: number | null
+          dte?: number | null
+          historical_low?: number | null
+          id?: string
+          iv_hv_ratio?: number | null
+          iv_percentile?: number | null
+          iv_rank?: number | null
+          name?: string | null
+          open_interest?: number | null
+          price?: number | null
+          rsi?: number | null
+          scan_date?: string
+          scanner_type: string
+          suggested_expiry?: string | null
+          suggested_strike?: number | null
+          ticker: string
+          user_id: string
+          volume?: number | null
+        }
+        Update: {
+          all_passed?: boolean
+          ask_price?: number | null
+          avg_volume?: number | null
+          bid_ask_spread?: number | null
+          change_pct?: number | null
+          checklist?: Json
+          confluence_score?: string | null
+          created_at?: string
+          delta?: number | null
+          dte?: number | null
+          historical_low?: number | null
+          id?: string
+          iv_hv_ratio?: number | null
+          iv_percentile?: number | null
+          iv_rank?: number | null
+          name?: string | null
+          open_interest?: number | null
+          price?: number | null
+          rsi?: number | null
+          scan_date?: string
+          scanner_type?: string
+          suggested_expiry?: string | null
+          suggested_strike?: number | null
+          ticker?: string
+          user_id?: string
+          volume?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Target, TrendingUp, TrendingDown, DollarSign, Loader2, Sparkles, Save, SlidersHorizontal } from 'lucide-react';
+import { Target, TrendingUp, TrendingDown, DollarSign, Loader2, Sparkles, Save, SlidersHorizontal, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, Area, AreaChart, ReferenceLine } from 'recharts';
 
 interface WealthGoal {
   id?: string;
@@ -15,6 +16,13 @@ interface WealthGoal {
   target_value: number;
   time_horizon_years: number;
 }
+
+const METRIC_TOOLTIPS: Record<string, string> = {
+  'Current Value': 'Starting capital plus total realized P&L from all closed trades.',
+  'Current CAGR': 'Your annualized return based on actual trading performance so far.',
+  'Remaining CAGR': 'The annualized return you need from today to hit your target on time.',
+  'Projected End': 'Where you\'ll end up if your current CAGR continues for the full horizon.',
+};
 
 export default function WealthBuilder() {
   const { user } = useAuth();
@@ -34,7 +42,6 @@ export default function WealthBuilder() {
   // Forecast sliders
   const [forecastCagr, setForecastCagr] = useState(30);
   const [forecastVol, setForecastVol] = useState(10);
-  const [forecastHorizon, setForecastHorizon] = useState(10);
 
   useEffect(() => {
     if (user) {
@@ -135,46 +142,33 @@ export default function WealthBuilder() {
     ? (Math.pow(goal.target_value / currentValue, 1 / remainingYears) - 1) * 100
     : 0;
   const paceStatus = currentCagr >= requiredCagr
-    ? { label: 'On pace', color: 'text-bullish', diff: currentCagr - requiredCagr }
-    : { label: `Behind by ${(requiredCagr - currentCagr).toFixed(1)}%`, color: 'text-bearish', diff: currentCagr - requiredCagr };
+    ? { label: 'On pace', color: 'text-bullish', bg: 'bg-bullish/10 border-bullish/30' }
+    : { label: `Behind by ${(requiredCagr - currentCagr).toFixed(1)}%`, color: 'text-bearish', bg: 'bg-bearish/10 border-bearish/30' };
 
-  // Chart data
-  const chartData = useMemo(() => {
+  // Combined chart data — single chart with all scenario lines
+  const combinedChartData = useMemo(() => {
     const points = [];
     for (let y = 0; y <= goal.time_horizon_years; y++) {
       const required = goal.starting_capital * Math.pow(1 + requiredCagr / 100, y);
       const actual = y <= elapsedYears
         ? goal.starting_capital + (totalPnl * (y / Math.max(0.1, elapsedYears)))
-        : null;
+        : undefined;
       const projected = goal.starting_capital * Math.pow(1 + currentCagr / 100, y);
+      const optimistic = currentValue * Math.pow(1 + (forecastCagr + forecastVol) / 100, y);
+      const base = currentValue * Math.pow(1 + forecastCagr / 100, y);
+      const pessimistic = currentValue * Math.pow(1 + Math.max(forecastCagr - forecastVol, 0) / 100, y);
       points.push({
         year: `Y${y}`,
-        required: Math.round(required),
-        actual: actual !== null ? Math.round(actual) : undefined,
+        target: Math.round(required),
+        actual: actual !== undefined ? Math.round(actual) : undefined,
         projected: Math.round(projected),
-      });
-    }
-    return points;
-  }, [goal, requiredCagr, currentCagr, totalPnl, elapsedYears]);
-
-  // Forecast data with sentiment sliders
-  const forecastData = useMemo(() => {
-    const points = [];
-    const baseValue = currentValue;
-    for (let y = 0; y <= forecastHorizon; y++) {
-      const optimistic = baseValue * Math.pow(1 + (forecastCagr + forecastVol) / 100, y);
-      const base = baseValue * Math.pow(1 + forecastCagr / 100, y);
-      const pessimistic = baseValue * Math.pow(1 + (forecastCagr - forecastVol) / 100, y);
-      points.push({
-        year: `Y${y}`,
-        optimistic: Math.round(optimistic),
+        bull: Math.round(optimistic),
         base: Math.round(base),
-        pessimistic: Math.round(pessimistic),
-        target: goal.target_value,
+        bear: Math.round(pessimistic),
       });
     }
     return points;
-  }, [currentValue, forecastCagr, forecastVol, forecastHorizon, goal.target_value]);
+  }, [goal, requiredCagr, currentCagr, totalPnl, elapsedYears, currentValue, forecastCagr, forecastVol]);
 
   // Strategy contribution
   const strategyContribution = useMemo(() => {
@@ -208,7 +202,6 @@ export default function WealthBuilder() {
       });
       if (!response.ok) throw new Error('AI request failed');
       const text = await response.text();
-      // Parse SSE stream for non-streaming fallback
       const lines = text.split('\n').filter(l => l.startsWith('data: '));
       let result = '';
       for (const line of lines) {
@@ -226,7 +219,7 @@ export default function WealthBuilder() {
     setLoadingAi(false);
   };
 
-  const formatCurrency = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const fmt = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
   if (loading) {
     return (
@@ -236,6 +229,8 @@ export default function WealthBuilder() {
     );
   }
 
+  const endBase = combinedChartData[combinedChartData.length - 1];
+
   return (
     <div className="max-w-4xl space-y-6 animate-slide-in">
       <h1 className="text-xl font-semibold text-foreground flex items-center gap-2">
@@ -243,27 +238,38 @@ export default function WealthBuilder() {
         Wealth Builder
       </h1>
 
-      {/* Goal Inputs */}
-      <section className="bg-card rounded-lg border border-border p-5 space-y-4">
-        <div className="text-sm font-semibold text-foreground">Goal Settings</div>
+      {/* Goal Setup + Pace Status */}
+      <section className="bg-card rounded-lg border border-border p-4 sm:p-5 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="text-sm font-semibold text-foreground">Goal Settings</div>
+          <div className={`text-xs font-semibold px-3 py-1 rounded-full border ${paceStatus.bg} ${paceStatus.color}`}>
+            {paceStatus.label}
+          </div>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <Label className="text-xs text-muted-foreground">Starting Capital</Label>
-            <Input
-              type="number"
-              value={goal.starting_capital}
-              onChange={e => setGoal(prev => ({ ...prev, starting_capital: Number(e.target.value) }))}
-              className="mt-1"
-            />
+            <div className="relative mt-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+              <Input
+                type="number"
+                value={goal.starting_capital}
+                onChange={e => setGoal(prev => ({ ...prev, starting_capital: Number(e.target.value) }))}
+                className="pl-7"
+              />
+            </div>
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Target Value</Label>
-            <Input
-              type="number"
-              value={goal.target_value}
-              onChange={e => setGoal(prev => ({ ...prev, target_value: Number(e.target.value) }))}
-              className="mt-1"
-            />
+            <div className="relative mt-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+              <Input
+                type="number"
+                value={goal.target_value}
+                onChange={e => setGoal(prev => ({ ...prev, target_value: Number(e.target.value) }))}
+                className="pl-7"
+              />
+            </div>
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Time Horizon (years)</Label>
@@ -275,7 +281,7 @@ export default function WealthBuilder() {
             />
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <span className="text-xs text-muted-foreground">
             Required CAGR: <span className="font-semibold text-primary">{requiredCagr.toFixed(1)}%</span>
           </span>
@@ -286,54 +292,28 @@ export default function WealthBuilder() {
         </div>
       </section>
 
-      {/* Gap Metrics */}
+      {/* Key Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricCard label="Current Value" value={formatCurrency(currentValue)} icon={<DollarSign className="h-4 w-4" />} />
-        <MetricCard label="Current CAGR" value={`${currentCagr.toFixed(1)}%`} icon={<TrendingUp className="h-4 w-4" />} color={currentCagr >= requiredCagr ? 'text-bullish' : 'text-bearish'} />
-        <MetricCard label="Remaining CAGR Needed" value={`${remainingCagr.toFixed(1)}%`} icon={<TrendingDown className="h-4 w-4" />} />
-        <MetricCard label="Projected End Value" value={formatCurrency(projectedEndValue)} icon={<Target className="h-4 w-4" />} color={projectedEndValue >= goal.target_value ? 'text-bullish' : 'text-bearish'} />
+        <MetricCard label="Current Value" value={fmt(currentValue)} icon={<DollarSign className="h-4 w-4" />} tooltip={METRIC_TOOLTIPS['Current Value']} />
+        <MetricCard label="Current CAGR" value={`${currentCagr.toFixed(1)}%`} icon={<TrendingUp className="h-4 w-4" />} color={currentCagr >= requiredCagr ? 'text-bullish' : 'text-bearish'} tooltip={METRIC_TOOLTIPS['Current CAGR']} />
+        <MetricCard label="Remaining CAGR" value={`${remainingCagr.toFixed(1)}%`} icon={<TrendingDown className="h-4 w-4" />} tooltip={METRIC_TOOLTIPS['Remaining CAGR']} />
+        <MetricCard label="Projected End" value={fmt(projectedEndValue)} icon={<Target className="h-4 w-4" />} color={projectedEndValue >= goal.target_value ? 'text-bullish' : 'text-bearish'} tooltip={METRIC_TOOLTIPS['Projected End']} />
       </div>
 
-      {/* Status */}
-      <div className={`text-center text-sm font-semibold ${paceStatus.color} bg-card border border-border rounded-lg py-3`}>
-        {paceStatus.label}
-      </div>
-
-      {/* Growth Chart */}
-      <section className="bg-card rounded-lg border border-border p-5">
-        <div className="text-sm font-semibold text-foreground mb-4">Growth Projection</div>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="year" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-            <YAxis
-              stroke="hsl(var(--muted-foreground))"
-              fontSize={12}
-              tickFormatter={v => `$${(v / 1000000).toFixed(1)}M`}
-            />
-            <Tooltip
-              contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
-              labelStyle={{ color: 'hsl(var(--foreground))' }}
-              formatter={(value: number) => formatCurrency(value)}
-            />
-            <Legend />
-            <Line type="monotone" dataKey="required" stroke="hsl(var(--primary))" strokeDasharray="5 5" name="Required Path" dot={false} />
-            <Line type="monotone" dataKey="projected" stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" name="Projected" dot={false} />
-            <Line type="monotone" dataKey="actual" stroke="hsl(142, 71%, 45%)" name="Actual" strokeWidth={2} dot={false} connectNulls={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </section>
-
-      {/* P&L Forecast with Sliders */}
-      <section className="bg-card rounded-lg border border-border p-5 space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <SlidersHorizontal className="h-4 w-4 text-primary" />
-          P&L Forecast — Scenario Projections
+      {/* Combined Projection Chart with Scenario Sliders */}
+      <section className="bg-card rounded-lg border border-border p-4 sm:p-5 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <SlidersHorizontal className="h-4 w-4 text-primary" />
+            Growth & Scenario Projection
+          </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+        {/* Inline sliders */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">Target CAGR</Label>
+              <Label className="text-xs text-muted-foreground">Forecast CAGR</Label>
               <span className="text-xs font-mono text-foreground">{forecastCagr}%</span>
             </div>
             <Slider min={10} max={50} step={1} value={[forecastCagr]} onValueChange={([v]) => setForecastCagr(v)} />
@@ -345,53 +325,57 @@ export default function WealthBuilder() {
             </div>
             <Slider min={2} max={25} step={1} value={[forecastVol]} onValueChange={([v]) => setForecastVol(v)} />
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">Horizon (years)</Label>
-              <span className="text-xs font-mono text-foreground">{forecastHorizon}yr</span>
-            </div>
-            <Slider min={3} max={20} step={1} value={[forecastHorizon]} onValueChange={([v]) => setForecastHorizon(v)} />
-          </div>
         </div>
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={forecastData}>
+
+        <ResponsiveContainer width="100%" height={350}>
+          <AreaChart data={combinedChartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="year" stroke="hsl(var(--muted-foreground))" fontSize={12} />
             <YAxis
               stroke="hsl(var(--muted-foreground))"
               fontSize={12}
-              tickFormatter={v => `$${(v / 1000000).toFixed(1)}M`}
+              tickFormatter={v => v >= 1000000 ? `$${(v / 1000000).toFixed(1)}M` : `$${(v / 1000).toFixed(0)}K`}
             />
-            <Tooltip
+            <RechartsTooltip
               contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
-              formatter={(value: number) => formatCurrency(value)}
+              labelStyle={{ color: 'hsl(var(--foreground))' }}
+              formatter={(value: number, name: string) => [fmt(value), name]}
             />
             <Legend />
-            <Line type="monotone" dataKey="optimistic" stroke="hsl(142, 71%, 45%)" strokeDasharray="4 4" name={`Bull (${forecastCagr + forecastVol}%)`} dot={false} />
-            <Line type="monotone" dataKey="base" stroke="hsl(var(--primary))" name={`Base (${forecastCagr}%)`} strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="pessimistic" stroke="hsl(0, 84%, 60%)" strokeDasharray="4 4" name={`Bear (${forecastCagr - forecastVol}%)`} dot={false} />
-            <Line type="monotone" dataKey="target" stroke="hsl(var(--muted-foreground))" strokeDasharray="8 4" name="Target" dot={false} />
-          </LineChart>
+            <defs>
+              <linearGradient id="scenarioBand" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.1} />
+                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <Area type="monotone" dataKey="bull" stroke="hsl(142, 71%, 45%)" fill="none" strokeDasharray="4 4" name={`Bull (${forecastCagr + forecastVol}%)`} dot={false} />
+            <Area type="monotone" dataKey="base" stroke="hsl(var(--primary))" fill="url(#scenarioBand)" strokeWidth={2} name={`Base (${forecastCagr}%)`} dot={false} />
+            <Area type="monotone" dataKey="bear" stroke="hsl(0, 84%, 60%)" fill="none" strokeDasharray="4 4" name={`Bear (${Math.max(forecastCagr - forecastVol, 0)}%)`} dot={false} />
+            <Line type="monotone" dataKey="target" stroke="hsl(var(--muted-foreground))" strokeDasharray="8 4" name="Required Path" dot={false} strokeWidth={1} />
+            <Line type="monotone" dataKey="actual" stroke="hsl(50, 100%, 50%)" name="Actual" strokeWidth={2.5} dot={false} connectNulls={false} />
+          </AreaChart>
         </ResponsiveContainer>
-        <div className="grid grid-cols-3 gap-3 text-center text-xs">
+
+        {/* Scenario summary */}
+        <div className="grid grid-cols-3 gap-3 text-center text-xs border-t border-border pt-3">
           <div>
             <div className="text-muted-foreground">Bear Case</div>
-            <div className="font-mono text-bearish">{formatCurrency(forecastData[forecastData.length - 1]?.pessimistic || 0)}</div>
+            <div className="font-mono text-bearish font-semibold">{fmt(endBase?.bear || 0)}</div>
           </div>
           <div>
             <div className="text-muted-foreground">Base Case</div>
-            <div className="font-mono text-primary font-semibold">{formatCurrency(forecastData[forecastData.length - 1]?.base || 0)}</div>
+            <div className="font-mono text-primary font-semibold">{fmt(endBase?.base || 0)}</div>
           </div>
           <div>
             <div className="text-muted-foreground">Bull Case</div>
-            <div className="font-mono text-bullish">{formatCurrency(forecastData[forecastData.length - 1]?.optimistic || 0)}</div>
+            <div className="font-mono text-bullish font-semibold">{fmt(endBase?.bull || 0)}</div>
           </div>
         </div>
       </section>
 
       {/* Strategy Contribution */}
       {strategyContribution.length > 0 && (
-        <section className="bg-card rounded-lg border border-border p-5">
+        <section className="bg-card rounded-lg border border-border p-4 sm:p-5">
           <div className="text-sm font-semibold text-foreground mb-3">Strategy Contribution</div>
           <div className="space-y-2">
             {strategyContribution.map(s => (
@@ -399,7 +383,7 @@ export default function WealthBuilder() {
                 <span className="text-foreground">{s.name}</span>
                 <div className="flex items-center gap-3">
                   <span className={`font-mono ${s.pnl >= 0 ? 'text-bullish' : 'text-bearish'}`}>
-                    {s.pnl >= 0 ? '+' : ''}{formatCurrency(s.pnl)}
+                    {s.pnl >= 0 ? '+' : ''}{fmt(s.pnl)}
                   </span>
                   <span className="text-xs text-muted-foreground w-12 text-right">{s.pct.toFixed(0)}%</span>
                   <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
@@ -416,8 +400,8 @@ export default function WealthBuilder() {
       )}
 
       {/* AI Suggestions */}
-      <section className="bg-card rounded-lg border border-border p-5 space-y-3">
-        <div className="flex items-center justify-between">
+      <section className="bg-card rounded-lg border border-border p-4 sm:p-5 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
             AI Suggestions
@@ -439,14 +423,28 @@ export default function WealthBuilder() {
   );
 }
 
-function MetricCard({ label, value, icon, color }: { label: string; value: string; icon: React.ReactNode; color?: string }) {
-  return (
-    <div className="bg-card rounded-lg border border-border p-4">
+function MetricCard({ label, value, icon, color, tooltip }: { label: string; value: string; icon: React.ReactNode; color?: string; tooltip?: string }) {
+  const card = (
+    <div className="bg-card rounded-lg border border-border p-3 sm:p-4">
       <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
         {icon}
         <span className="text-xs">{label}</span>
+        {tooltip && <Info className="h-3 w-3 text-muted-foreground/50" />}
       </div>
-      <div className={`text-lg font-semibold ${color || 'text-foreground'}`}>{value}</div>
+      <div className={`text-base sm:text-lg font-semibold ${color || 'text-foreground'}`}>{value}</div>
     </div>
+  );
+
+  if (!tooltip) return card;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{card}</TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">
+          <p>{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

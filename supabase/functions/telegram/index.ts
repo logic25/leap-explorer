@@ -143,7 +143,7 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
 
   // Handle /start
   if (text === "/start") {
-    await sendTelegramMessage(token, chatId, "👋 *Welcome to LEAPS Trader Bot!*\n\nLink this bot in your LEAPS Trader Settings page using your Chat ID: `" + chatId + "`\n\nCommands:\n/approve TICKER - Approve a trade\n/status - View open positions");
+    await sendTelegramMessage(token, chatId, "👋 *Welcome to LEAPS Trader Bot!*\n\nLink this bot in your LEAPS Trader Settings page using your Chat ID: `" + chatId + "`\n\nCommands:\n/approve TICKER - Approve a trade\n/reject TICKER [reason] - Reject a trade\n/status - View open positions");
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -163,10 +163,12 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
     });
   }
 
-  if (text.startsWith("/approve")) {
+  if (text.startsWith("/approve") || text.startsWith("/reject")) {
+    const isApprove = text.startsWith("/approve");
     const ticker = text.split(" ")[1]?.toUpperCase();
+    const reason = text.split(" ").slice(2).join(" ") || undefined;
     if (!ticker) {
-      await sendTelegramMessage(token, chatId, "Usage: /approve TICKER (e.g., /approve NVDA)");
+      await sendTelegramMessage(token, chatId, `Usage: /${isApprove ? "approve" : "reject"} TICKER${isApprove ? "" : " [reason]"}`);
     } else {
       const today = new Date().toISOString().split("T")[0];
       const { data: alert } = await supabase
@@ -179,15 +181,31 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
 
       if (!alert) {
         await sendTelegramMessage(token, chatId, `❌ No alert found for ${ticker} today.`);
-      } else if (!alert.all_passed) {
+      } else if (isApprove && !alert.all_passed) {
         await sendTelegramMessage(token, chatId, `⚠️ ${ticker} checklist incomplete. Cannot approve.`);
-      } else {
+      } else if (isApprove) {
+        // Get trading mode
+        const { data: userProfile } = await supabase
+          .from("profiles")
+          .select("trading_mode")
+          .eq("id", profile.id)
+          .single();
+        const mode = userProfile?.trading_mode || "paper";
+
         await supabase.from("audit_log").insert({
           user_id: profile.id,
           action_type: "TRADE_APPROVED_TELEGRAM",
-          details: { ticker, strike: alert.suggested_strike, expiry: alert.suggested_expiry, delta: alert.delta },
+          details: { ticker, strike: alert.suggested_strike, expiry: alert.suggested_expiry, delta: alert.delta, mode },
         });
-        await sendTelegramMessage(token, chatId, `✅ *${ticker} APPROVED*\n\nStrike: $${alert.suggested_strike}\nExpiry: ${alert.suggested_expiry}\nDelta: ${alert.delta}\n\n_Trade logged. Paper mode._`);
+        await sendTelegramMessage(token, chatId, `✅ *${ticker} APPROVED*\n\nStrike: $${alert.suggested_strike}\nExpiry: ${alert.suggested_expiry}\nDelta: ${alert.delta}\n\n_Trade logged. ${mode === "live" ? "🔴 LIVE mode." : "📝 Paper mode."}_`);
+      } else {
+        // Reject
+        await supabase.from("audit_log").insert({
+          user_id: profile.id,
+          action_type: "TRADE_REJECTED_TELEGRAM",
+          details: { ticker, strike: alert.suggested_strike, expiry: alert.suggested_expiry, reason },
+        });
+        await sendTelegramMessage(token, chatId, `❌ *${ticker} REJECTED*${reason ? `\n\nReason: ${reason}` : ""}\n\n_Logged to audit trail._`);
       }
     }
   } else if (text === "/status") {
@@ -206,7 +224,7 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
       await sendTelegramMessage(token, chatId, `📊 *Open Positions*\n\n${lines.join("\n")}`);
     }
   } else if (text === "/help") {
-    await sendTelegramMessage(token, chatId, "*LEAPS Trader Bot*\n\nCommands:\n/start - Welcome & Chat ID\n/approve TICKER - Approve a trade\n/status - View open positions\n/help - Show this message");
+    await sendTelegramMessage(token, chatId, "*LEAPS Trader Bot*\n\nCommands:\n/start - Welcome & Chat ID\n/approve TICKER - Approve a trade\n/reject TICKER [reason] - Reject a trade\n/status - View open positions\n/help - Show this message");
   } else {
     await sendTelegramMessage(token, chatId, "Unknown command. Try /help");
   }
@@ -241,5 +259,5 @@ function formatAlertMessage(alerts: any[]): string {
     return `${emoji} *${a.ticker}* — ${a.scanner_type}\n   $${a.price} | RSI ${a.rsi} | Δ${a.delta || "?"} | ${checkPassed}/${checkTotal} ✓\n   Strike: $${a.suggested_strike || "?"} | ${a.suggested_expiry || "?"}`;
   });
 
-  return `📡 *Daily Scan Results*\n${new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}\n\n${lines.join("\n\n")}\n\n_Reply /approve TICKER to execute_`;
+  return `📡 *Daily Scan Results*\n${new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}\n\n${lines.join("\n\n")}\n\n_Reply /approve TICKER to execute_\n_Reply /reject TICKER [reason] to pass_`;
 }

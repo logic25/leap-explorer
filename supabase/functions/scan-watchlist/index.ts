@@ -110,17 +110,28 @@ Deno.serve(async (req) => {
               const dte = expDate ? Math.round((new Date(expDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
 
               // Try to get last day's data for this contract via aggs (free tier, delayed)
-              let ask = 0, bid = 0, oi = 0, iv = null;
+              let ask = 0, bid = 0, oi = 0, iv = null, historicalLow = 0;
               try {
                 const optTicker = best.ticker;
+                // Get previous day close
                 const optAggsUrl = `https://api.polygon.io/v2/aggs/ticker/${optTicker}/prev?adjusted=true&apiKey=${POLYGON_API_KEY}`;
                 const optAggsRes = await fetch(optAggsUrl);
                 const optAggsData = await optAggsRes.json();
                 if (optAggsData.results?.[0]) {
                   const optBar = optAggsData.results[0];
-                  // Use close as a proxy for mid-price
-                  ask = optBar.c * 1.02; // rough estimate
+                  ask = optBar.c * 1.02;
                   bid = optBar.c * 0.98;
+                }
+
+                // Fetch historical low for this option contract (last 12 months)
+                await sleep(13000); // rate limit
+                const optHistFrom = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+                const optHistTo = new Date().toISOString().split("T")[0];
+                const optHistUrl = `https://api.polygon.io/v2/aggs/ticker/${optTicker}/range/1/day/${optHistFrom}/${optHistTo}?adjusted=true&sort=asc&limit=300&apiKey=${POLYGON_API_KEY}`;
+                const optHistRes = await fetch(optHistUrl);
+                const optHistData = await optHistRes.json();
+                if (optHistData.results && optHistData.results.length > 0) {
+                  historicalLow = Math.min(...optHistData.results.map((b: any) => b.l));
                 }
               } catch (e) {
                 console.log(`Option aggs failed for ${best.ticker}:`, e);
@@ -141,6 +152,7 @@ Deno.serve(async (req) => {
                 bid_ask_spread: Math.round(spread * 100) / 100,
                 ask_price: Math.round(ask * 100) / 100,
                 iv_percentile: iv,
+                historical_low: historicalLow > 0 ? Math.round(historicalLow * 100) / 100 : null,
               };
             }
           } catch (e) {
@@ -168,6 +180,7 @@ Deno.serve(async (req) => {
             bid_ask_spread: optionData.bid_ask_spread || null,
             iv_percentile: optionData.iv_percentile || null,
             ask_price: optionData.ask_price || null,
+            historical_low: optionData.historical_low || null,
             checklist,
             all_passed: allPassed,
           });

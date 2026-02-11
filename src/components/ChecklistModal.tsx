@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScannerBadge } from './ScannerBadge';
+import { TradingViewChart } from './TradingViewChart';
 import { Check, X, AlertTriangle } from 'lucide-react';
 import type { ScannerAlert } from '@/lib/mock-data';
 
@@ -17,7 +18,7 @@ export function ChecklistModal({ alert, open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg bg-card border-border">
+      <DialogContent className="sm:max-w-2xl bg-card border-border max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <span className="font-mono text-lg">{alert.ticker}</span>
@@ -42,6 +43,9 @@ export function ChecklistModal({ alert, open, onClose }: Props) {
               Ask is {((alert.askPrice / alert.historicalLow - 1) * 100).toFixed(0)}% above 12-month low
             </div>
           )}
+
+          {/* TradingView Chart */}
+          <TradingViewChart ticker={alert.ticker} />
 
           {/* Checklist */}
           <div className="space-y-1.5">

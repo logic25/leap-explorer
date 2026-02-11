@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    let body: { user_id?: string } = {};
+    let body: { user_id?: string; tickers?: string[] } = {};
     try { body = await req.json(); } catch { /* cron call */ }
 
     let profilesQuery = supabase.from("profiles").select("id, stock_watchlist");
@@ -34,7 +34,8 @@ Deno.serve(async (req) => {
     const allAlerts: any[] = [];
 
     for (const profile of profiles || []) {
-      const watchlist: string[] = profile.stock_watchlist || [];
+      // Allow override of tickers for testing
+      const watchlist: string[] = body.tickers || profile.stock_watchlist || [];
       if (watchlist.length === 0) continue;
 
       // Process each ticker — free tier allows per-ticker aggs

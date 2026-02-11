@@ -114,19 +114,25 @@ Deno.serve(async (req) => {
           let scannerType: string | null = null;
           if (run.strategy) {
               const conds = run.strategy.conditions || {};
+              const metrics: string[] = conds.enabled_metrics || [];
+              const hasMetric = (m: string) => metrics.length === 0 || metrics.includes(m);
               let match = true;
-              if (conds.rsi_max != null && rsi > conds.rsi_max) match = false;
-              if (conds.rsi_min != null && rsi < conds.rsi_min) match = false;
-              if (conds.volume_ratio_min != null && volRatio < conds.volume_ratio_min) match = false;
-              if (conds.change_pct_min != null && changePct < conds.change_pct_min) match = false;
-              if (conds.change_pct_max != null && changePct > conds.change_pct_max) match = false;
-              if (conds.price_vs_sma50 === "above" && price <= sma50) match = false;
-              if (conds.price_vs_sma50 === "below" && price >= sma50) match = false;
-              if (conds.price_vs_sma50 === "near" && Math.abs(price - sma50) / sma50 > 0.03) match = false;
-              if (conds.price_vs_sma200 === "above" && price <= sma200) match = false;
-              if (conds.price_vs_sma200 === "below" && price >= sma200) match = false;
-              if (conds.price_vs_sma200 === "near" && Math.abs(price - sma200) / sma200 > 0.03) match = false;
-              if (conds.drawdown_from_sma50_min != null) {
+              if (hasMetric('rsi') && conds.rsi_max != null && rsi > conds.rsi_max) match = false;
+              if (hasMetric('rsi') && conds.rsi_min != null && rsi < conds.rsi_min) match = false;
+              if (hasMetric('volume_ratio') && conds.volume_ratio_min != null && volRatio < conds.volume_ratio_min) match = false;
+              if (hasMetric('change_pct') && conds.change_pct_min != null && changePct < conds.change_pct_min) match = false;
+              if (hasMetric('change_pct') && conds.change_pct_max != null && changePct > conds.change_pct_max) match = false;
+              if (hasMetric('price_vs_sma50')) {
+                if (conds.price_vs_sma50 === "above" && price <= sma50) match = false;
+                if (conds.price_vs_sma50 === "below" && price >= sma50) match = false;
+                if (conds.price_vs_sma50 === "near" && Math.abs(price - sma50) / sma50 > 0.03) match = false;
+              }
+              if (hasMetric('price_vs_sma200')) {
+                if (conds.price_vs_sma200 === "above" && price <= sma200) match = false;
+                if (conds.price_vs_sma200 === "below" && price >= sma200) match = false;
+                if (conds.price_vs_sma200 === "near" && Math.abs(price - sma200) / sma200 > 0.03) match = false;
+              }
+              if (hasMetric('drawdown_from_sma50') && conds.drawdown_from_sma50_min != null) {
                 const drawdown = ((sma50 - price) / sma50) * 100;
                 if (drawdown < conds.drawdown_from_sma50_min) match = false;
               }

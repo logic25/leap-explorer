@@ -24,6 +24,20 @@ import { BookOpen, Loader2, Save, Plus, Trash2, Sparkles, Pencil } from 'lucide-
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+const AVAILABLE_METRICS = [
+  { key: 'rsi', label: 'RSI (Relative Strength Index)', group: 'Technical' },
+  { key: 'volume_ratio', label: 'Volume Ratio (vol/avg)', group: 'Technical' },
+  { key: 'price_vs_sma50', label: 'Price vs 50-day SMA', group: 'Technical' },
+  { key: 'price_vs_sma200', label: 'Price vs 200-day SMA', group: 'Technical' },
+  { key: 'change_pct', label: 'Daily Price Change %', group: 'Technical' },
+  { key: 'drawdown_from_sma50', label: 'Drawdown from 50 SMA', group: 'Technical' },
+  { key: 'delta', label: 'Option Delta', group: 'Options' },
+  { key: 'dte', label: 'Days to Expiry (DTE)', group: 'Options' },
+  { key: 'iv_percentile', label: 'IV Percentile', group: 'Options' },
+  { key: 'open_interest', label: 'Open Interest', group: 'Options' },
+  { key: 'bid_ask_spread', label: 'Bid-Ask Spread', group: 'Options' },
+] as const;
+
 interface Strategy {
   id?: string;
   name: string;
@@ -385,6 +399,39 @@ export default function StrategyPlaybook({ userId }: StrategyPlaybookProps) {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Metrics to scan */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Metrics to Scan</Label>
+              <p className="text-xs text-muted-foreground/70">Select which fields this scanner evaluates. Unchecked metrics are ignored.</p>
+              {['Technical', 'Options'].map(group => (
+                <div key={group} className="space-y-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">{group}</span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {AVAILABLE_METRICS.filter(m => m.group === group).map(metric => {
+                      const enabled = (draft.conditions.enabled_metrics || []).includes(metric.key);
+                      return (
+                        <label key={metric.key} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-accent/50 rounded px-2 py-1.5 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={(e) => {
+                              const current: string[] = draft.conditions.enabled_metrics || [];
+                              const next = e.target.checked
+                                ? [...current, metric.key]
+                                : current.filter((k: string) => k !== metric.key);
+                              updateDraftCondition('enabled_metrics', next);
+                            }}
+                            className="h-3.5 w-3.5 rounded border-border accent-primary"
+                          />
+                          <span className="text-foreground">{metric.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
 
             <Tabs defaultValue="ai" className="w-full">

@@ -426,6 +426,80 @@ async function executeTradeAndNotify(
   const contractCost = fillPrice * 100; // options are per 100 shares
   const suggestedQty = contractCost > 0 ? Math.max(1, Math.floor(maxPositionValue / contractCost)) : 1;
 
+  // ─── Alpaca Order Execution ─────────────────────────────
+  let alpacaOrderId: string | null = null;
+  let alpacaStatus: string | null = null;
+  let alpacaError: string | null = null;
+
+  const ALPACA_API_KEY = Deno.env.get("ALPACA_API_KEY");
+  const ALPACA_SECRET_KEY = Deno.env.get("ALPACA_SECRET_KEY");
+
+  if (ALPACA_API_KEY && ALPACA_SECRET_KEY) {
+    // Build the OCC option symbol: TICKER + YYMMDD + C/P + strike*1000 (8 digits)
+    const expiry = alert.suggested_expiry; // e.g. "2028-01-21"
+    const strike = alert.suggested_strike;
+
+    let optionSymbol: string | null = null;
+    if (expiry && strike) {
+      const expDate = new Date(expiry);
+      const yy = String(expDate.getFullYear()).slice(-2);
+      const mm = String(expDate.getMonth() + 1).padStart(2, "0");
+      const dd = String(expDate.getDate()).padStart(2, "0");
+      const strikePadded = String(Math.round(strike * 1000)).padStart(8, "0");
+      const paddedTicker = ticker.padEnd(6, " ");
+      optionSymbol = `${paddedTicker}${yy}${mm}${dd}C${strikePadded}`;
+    }
+
+    // Determine endpoint: paper vs live
+    const alpacaBaseUrl = mode === "live"
+      ? "https://api.alpaca.markets/v2"
+      : "https://paper-api.alpaca.markets/v2";
+
+    if (optionSymbol) {
+      try {
+        const orderPayload: any = {
+          symbol: optionSymbol,
+          qty: String(suggestedQty),
+          side: "buy",
+          type: "limit",
+          time_in_force: "day",
+          limit_price: String(fillPrice.toFixed(2)),
+        };
+
+        console.log(`Submitting Alpaca ${mode} order:`, JSON.stringify(orderPayload));
+
+        const orderRes = await fetch(`${alpacaBaseUrl}/orders`, {
+          method: "POST",
+          headers: {
+            "APCA-API-KEY-ID": ALPACA_API_KEY,
+            "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(orderPayload),
+        });
+
+        const orderData = await orderRes.json();
+
+        if (orderRes.ok) {
+          alpacaOrderId = orderData.id;
+          alpacaStatus = orderData.status;
+          console.log(`Alpaca order placed: ${alpacaOrderId} (${alpacaStatus})`);
+        } else {
+          alpacaError = orderData.message || JSON.stringify(orderData);
+          console.error(`Alpaca order failed [${orderRes.status}]:`, alpacaError);
+        }
+      } catch (e) {
+        alpacaError = String(e);
+        console.error("Alpaca order error:", e);
+      }
+    } else {
+      alpacaError = "Missing expiry or strike — cannot build option symbol";
+    }
+  } else if (mode === "live") {
+    alpacaError = "ALPACA_API_KEY or ALPACA_SECRET_KEY not configured";
+  }
+
+  // ─── Insert Position to DB ──────────────────────────────
   const { error: posError } = await supabase.from("positions").insert({
     user_id: profile.id,
     ticker,
@@ -452,10 +526,29 @@ async function executeTradeAndNotify(
     await supabase.from("audit_log").insert({
       user_id: profile.id,
       action_type: "TRADE_EXECUTED_TELEGRAM",
-      details: { ticker, strike: alert.suggested_strike, expiry: alert.suggested_expiry, delta: alert.delta, mode, fill_price: fillPrice, qty: suggestedQty },
+      details: {
+        ticker,
+        strike: alert.suggested_strike,
+        expiry: alert.suggested_expiry,
+        delta: alert.delta,
+        mode,
+        fill_price: fillPrice,
+        qty: suggestedQty,
+        alpaca_order_id: alpacaOrderId,
+        alpaca_status: alpacaStatus,
+        alpaca_error: alpacaError,
+      },
     });
 
     const allocationPct = Math.round((suggestedQty * contractCost / accountSize) * 100 * 10) / 10;
+
+    // Build Alpaca status line
+    let alpacaLine = "";
+    if (alpacaOrderId) {
+      alpacaLine = `\n🔗 Alpaca: \`${alpacaStatus}\` (${alpacaOrderId.slice(0, 8)}...)`;
+    } else if (alpacaError) {
+      alpacaLine = `\n⚠️ Alpaca: ${alpacaError}`;
+    }
 
     await sendTelegramMessage(token, chatId,
       `✅ *${ticker} FILLED*\n\n` +
@@ -465,9 +558,10 @@ async function executeTradeAndNotify(
       `Fill Price: $${fillPrice.toFixed(2)}\n` +
       `Qty: ${suggestedQty} contract${suggestedQty > 1 ? "s" : ""}\n` +
       `Total Cost: $${(suggestedQty * contractCost).toLocaleString()}\n` +
-      `Allocation: ${allocationPct}% of $${accountSize.toLocaleString()}\n\n` +
-      `_Sizing: ${positionSizePct}% rule → max $${maxPositionValue.toLocaleString()}_\n` +
-      `_${mode === "live" ? "🔴 LIVE execution." : "📝 Paper trade."} Position opened._`
+      `Allocation: ${allocationPct}% of $${accountSize.toLocaleString()}` +
+      alpacaLine +
+      `\n\n_Sizing: ${positionSizePct}% rule → max $${maxPositionValue.toLocaleString()}_\n` +
+      `_${mode === "live" ? "🔴 LIVE order submitted to Alpaca." : "📝 Paper trade."} Position opened._`
     );
   }
 

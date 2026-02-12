@@ -80,8 +80,8 @@ Deno.serve(async (req) => {
 
         if (!profile?.telegram_chat_id) continue;
 
-        const message = formatAlertMessage(userAlertList, profile);
-        await sendTelegramMessage(TELEGRAM_BOT_TOKEN, profile.telegram_chat_id, message);
+        const { message, buttons } = formatAlertMessage(userAlertList, profile);
+        await sendTelegramMessage(TELEGRAM_BOT_TOKEN, profile.telegram_chat_id, message, buttons);
         sent++;
       }
 
@@ -165,6 +165,29 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   };
+
+  // Handle inline button callbacks
+  if (update?.callback_query) {
+    const cbq = update.callback_query;
+    const chatId = cbq.message.chat.id;
+    const data = cbq.data; // e.g. "approve:NVDA" or "confirm:NVDA" or "reject:NVDA"
+
+    // Acknowledge the button press
+    await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callback_query_id: cbq.id }),
+    });
+
+    // Simulate the equivalent text command
+    const fakeUpdate = {
+      message: {
+        chat: { id: chatId },
+        text: `/${data.replace(":", " ")}`,
+      },
+    };
+    return handleWebhook(fakeUpdate, token, supabase);
+  }
 
   if (!update?.message?.text) {
     return new Response(JSON.stringify({ ok: true }), {
@@ -294,6 +317,15 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
     try {
       const aiSuggestion = await getAIPriceSuggestion(alert);
 
+      const buttons = {
+        inline_keyboard: [
+          [
+            { text: `✅ Confirm ${ticker}`, callback_data: `confirm:${ticker}` },
+            { text: `❌ Reject ${ticker}`, callback_data: `reject:${ticker}` },
+          ],
+        ],
+      };
+
       await sendTelegramMessage(token, chatId,
         `🤖 *AI Price Suggestion for ${ticker}*\n\n` +
         `📋 Playbook: *${playbookName}*\n` +
@@ -306,22 +338,27 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
         `📦 *Position Sizing*\n` +
         `${estQty} contract${estQty > 1 ? "s" : ""} @ $${askPrice.toFixed(2)} = $${estTotal.toLocaleString()}\n` +
         `Allocation: ${estAlloc}% of $${accountSize.toLocaleString()}\n` +
-        `_Rule: ${positionSizePct}% → max $${maxPositionValue.toLocaleString()}_\n\n` +
-        `Reply:\n` +
-        `/confirm ${ticker} — Execute at $${aiSuggestion.price}\n` +
-        `/approve ${ticker} ${aiSuggestion.price} — Override with your price`
+        `_Rule: ${positionSizePct}% → max $${maxPositionValue.toLocaleString()}_`,
+        buttons
       );
     } catch (e) {
       console.error("AI suggestion failed:", e);
       const fallbackPrice = askPrice > 0 ? Math.round(askPrice * 0.98 * 100) / 100 : 0;
 
+      const buttons = {
+        inline_keyboard: [
+          [
+            { text: `✅ Confirm ${ticker}`, callback_data: `confirm:${ticker}` },
+            { text: `❌ Reject ${ticker}`, callback_data: `reject:${ticker}` },
+          ],
+        ],
+      };
+
       await sendTelegramMessage(token, chatId,
         `⚠️ AI suggestion unavailable. Fallback mid-price: $${fallbackPrice}\n\n` +
         `📋 Playbook: *${playbookName}*\n` +
-        `📦 ${estQty} contract${estQty > 1 ? "s" : ""} @ $${askPrice.toFixed(2)} = $${estTotal.toLocaleString()} (${estAlloc}%)\n\n` +
-        `Reply:\n` +
-        `/confirm ${ticker} — Execute at $${fallbackPrice}\n` +
-        `/approve ${ticker} [your_price]`
+        `📦 ${estQty} contract${estQty > 1 ? "s" : ""} @ $${askPrice.toFixed(2)} = $${estTotal.toLocaleString()} (${estAlloc}%)`,
+        buttons
       );
     }
 
@@ -684,6 +721,34 @@ async function executeTradeAndNotify(
           alpacaOrderId = orderData.id;
           alpacaStatus = orderData.status;
           console.log(`Alpaca order placed: ${alpacaOrderId} (${alpacaStatus})`);
+
+          // Poll for fill status (up to 10s)
+          if (alpacaStatus !== "filled") {
+            for (let i = 0; i < 5; i++) {
+              await new Promise(r => setTimeout(r, 2000));
+              try {
+                const checkRes = await fetch(`${alpacaBaseUrl}/orders/${alpacaOrderId}`, {
+                  headers: {
+                    "APCA-API-KEY-ID": ALPACA_API_KEY,
+                    "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
+                  },
+                });
+                const checkData = await checkRes.json();
+                if (checkData.status === "filled") {
+                  alpacaStatus = "filled";
+                  if (checkData.filled_avg_price) {
+                    fillPrice = Number(checkData.filled_avg_price);
+                  }
+                  console.log(`Order filled at $${fillPrice}`);
+                  break;
+                } else if (checkData.status === "canceled" || checkData.status === "rejected") {
+                  alpacaStatus = checkData.status;
+                  alpacaError = `Order ${checkData.status}`;
+                  break;
+                }
+              } catch { /* continue polling */ }
+            }
+          }
         } else {
           alpacaError = orderData.message || JSON.stringify(orderData);
           console.error(`Alpaca order failed [${orderRes.status}]:`, alpacaError);
@@ -745,13 +810,19 @@ async function executeTradeAndNotify(
 
     let alpacaLine = "";
     if (alpacaOrderId) {
-      alpacaLine = `\n🔗 Alpaca: \`${alpacaStatus}\` (${alpacaOrderId.slice(0, 8)}...)`;
+      const statusEmoji = alpacaStatus === "filled" ? "✅" : alpacaStatus === "accepted" || alpacaStatus === "new" ? "⏳" : "⚠️";
+      alpacaLine = `\n${statusEmoji} Alpaca: *${alpacaStatus}* @ $${fillPrice.toFixed(2)}`;
+      if (alpacaStatus !== "filled") {
+        alpacaLine += `\n_Order pending — you'll see it in /orders_`;
+      }
     } else if (alpacaError) {
       alpacaLine = `\n⚠️ Alpaca: ${alpacaError}`;
     }
 
+    const statusLabel = alpacaStatus === "filled" ? "FILLED" : "ORDER PLACED";
+
     await sendTelegramMessage(token, chatId,
-      `✅ *${ticker} FILLED*\n\n` +
+      `✅ *${ticker} ${statusLabel}*\n\n` +
       `📋 Playbook: *${playbookName}*\n` +
       `Strike: $${alert.suggested_strike}\n` +
       `Expiry: ${alert.suggested_expiry}\n` +
@@ -828,15 +899,19 @@ async function getAIPriceSuggestion(alert: any): Promise<{ price: number; reason
   return JSON.parse(toolCall.function.arguments);
 }
 
-async function sendTelegramMessage(token: string, chatId: string | number, text: string) {
+async function sendTelegramMessage(token: string, chatId: string | number, text: string, replyMarkup?: any) {
+  const payload: any = {
+    chat_id: chatId,
+    text,
+    parse_mode: "Markdown",
+  };
+  if (replyMarkup) {
+    payload.reply_markup = replyMarkup;
+  }
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: "Markdown",
-    }),
+    body: JSON.stringify(payload),
   });
   const data = await res.json();
   if (!data.ok) {
@@ -845,7 +920,7 @@ async function sendTelegramMessage(token: string, chatId: string | number, text:
   return data;
 }
 
-function formatAlertMessage(alerts: any[], profile?: any): string {
+function formatAlertMessage(alerts: any[], profile?: any): { message: string; buttons: any } {
   const accountSize = Number(profile?.account_size) || 100000;
   const positionSizePct = Number(profile?.position_size_pct) || 3;
   const maxPositionValue = accountSize * (positionSizePct / 100);
@@ -855,7 +930,6 @@ function formatAlertMessage(alerts: any[], profile?: any): string {
     const checkTotal = (a.checklist as any[])?.length || 12;
     const emoji = a.scanner_type === "Value Zone" ? "🔵" : a.scanner_type === "MegaRun" ? "🟢" : "🟡";
 
-    // Position sizing info
     const askPrice = Number(a.ask_price) || 0;
     const contractCost = askPrice * 100;
     const suggestedQty = contractCost > 0 ? Math.max(1, Math.floor(maxPositionValue / contractCost)) : 1;
@@ -868,5 +942,16 @@ function formatAlertMessage(alerts: any[], profile?: any): string {
       `   📦 ${suggestedQty} contract${suggestedQty > 1 ? "s" : ""} @ $${askPrice.toFixed(2)} = $${totalCost.toLocaleString()} (${allocPct}%)`;
   });
 
-  return `📡 *Daily Scan Results*\n${new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}\n\n${lines.join("\n\n")}\n\n_Sizing: ${positionSizePct}% of $${accountSize.toLocaleString()} = max $${maxPositionValue.toLocaleString()}_\n\n_Reply /approve TICKER for AI price suggestion_\n_Reply /reject TICKER [reason] to pass_`;
+  // Build inline buttons — one row per ticker with Approve/Reject
+  const inlineButtons = alerts.map((a) => [
+    { text: `👍 Approve ${a.ticker}`, callback_data: `approve:${a.ticker}` },
+    { text: `👎 Reject ${a.ticker}`, callback_data: `reject:${a.ticker}` },
+  ]);
+
+  const message = `📡 *Daily Scan Results*\n${new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}\n\n${lines.join("\n\n")}\n\n_Sizing: ${positionSizePct}% of $${accountSize.toLocaleString()} = max $${maxPositionValue.toLocaleString()}_`;
+
+  return {
+    message,
+    buttons: { inline_keyboard: inlineButtons },
+  };
 }

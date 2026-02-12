@@ -3,12 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Eye, EyeOff, Save, Key, Server, Loader2, BarChart3 } from 'lucide-react';
+import { Eye, EyeOff, Save, Key, Server, Loader2, BarChart3, RotateCcw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import WatchlistEditor from '@/components/settings/WatchlistEditor';
 import TelegramSection from '@/components/settings/TelegramSection';
+import OnboardingWizard from '@/components/OnboardingWizard';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -25,6 +26,7 @@ export default function Settings() {
   const [accountSize, setAccountSize] = useState(100000);
   const [positionSizePct, setPositionSizePct] = useState(3);
   const [maxAllocPct, setMaxAllocPct] = useState(80);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -73,9 +75,18 @@ export default function Settings() {
     setSavingSettings(false);
   };
 
+  if (showOnboarding) {
+    return <OnboardingWizard onComplete={() => setShowOnboarding(false)} />;
+  }
+
   return (
     <div className="max-w-2xl space-y-8 animate-slide-in">
-      <h1 className="text-xl font-semibold text-foreground">Settings</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold text-foreground">Settings</h1>
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowOnboarding(true)}>
+          <RotateCcw className="h-3.5 w-3.5" /> Re-run Setup
+        </Button>
+      </div>
 
       {/* Telegram */}
       {user && (

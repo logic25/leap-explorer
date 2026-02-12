@@ -8,7 +8,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import WatchlistEditor from '@/components/settings/WatchlistEditor';
-import StrategyPlaybook from '@/components/settings/StrategyPlaybook';
 import TelegramSection from '@/components/settings/TelegramSection';
 
 export default function Settings() {
@@ -215,8 +214,7 @@ export default function Settings() {
         </p>
       </div>
 
-      {/* Strategy Playbook */}
-      {user && <StrategyPlaybook userId={user.id} />}
+      {/* Playbooks are now in the right sidebar panel */}
 
       <Button className="gap-2" onClick={saveSettings} disabled={savingSettings}>
         {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

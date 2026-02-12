@@ -91,7 +91,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
           description: preset.description,
           conditions: preset.conditions,
           enabled: true,
-          tickers: [],
+          tickers: watchlist,
         } as any);
       }
 

@@ -40,11 +40,11 @@ export function AssignStrategyModal({ strategies, positions, onStrategiesChange,
     }).select().single();
 
     if (error) {
-      toast.error('Failed to create strategy');
+      toast.error('Failed to create playbook');
       return;
     }
     onStrategiesChange([...strategies, data as Strategy]);
-    toast.success(`Strategy "${name}" created`);
+    toast.success(`Playbook "${name}" created`);
     setName('');
     setDescription('');
     setOpen(false);
@@ -57,13 +57,13 @@ export function AssignStrategyModal({ strategies, positions, onStrategiesChange,
       .eq('id', selectedPosition);
 
     if (error) {
-      toast.error('Failed to assign strategy');
+      toast.error('Failed to assign playbook');
       return;
     }
     onPositionsChange(positions.map(p =>
       p.id === selectedPosition ? { ...p, strategy_id: selectedStrategy } : p
     ));
-    toast.success('Strategy assigned to position');
+    toast.success('Playbook assigned to position');
     setOpen(false);
   };
 
@@ -71,12 +71,12 @@ export function AssignStrategyModal({ strategies, positions, onStrategiesChange,
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="text-xs gap-1">
-          <Plus className="h-3 w-3" /> Add Strategy
+          <Plus className="h-3 w-3" /> Add Playbook
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Strategy / Playbook</DialogTitle>
+          <DialogTitle>Playbook</DialogTitle>
         </DialogHeader>
 
         <div className="flex gap-2 mb-4">
@@ -139,10 +139,10 @@ export function AssignStrategyModal({ strategies, positions, onStrategiesChange,
         ) : (
           <div className="space-y-4">
             <div>
-              <Label className="text-xs text-muted-foreground">Strategy</Label>
+              <Label className="text-xs text-muted-foreground">Playbook</Label>
               <Select value={selectedStrategy} onValueChange={setSelectedStrategy}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select a strategy" />
+                  <SelectValue placeholder="Select a playbook" />
                 </SelectTrigger>
                 <SelectContent>
                   {strategies.map(s => (

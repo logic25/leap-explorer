@@ -424,10 +424,10 @@ export default function WealthBuilder() {
         </div>
       </section>
 
-      {/* Strategy Contribution */}
+      {/* Playbook Contribution */}
       {strategyContribution.length > 0 && (
         <section className="bg-card rounded-lg border border-border p-4 sm:p-5">
-          <div className="text-sm font-semibold text-foreground mb-3">Strategy Contribution</div>
+          <div className="text-sm font-semibold text-foreground mb-3">Playbook Contribution</div>
           <div className="space-y-2">
             {strategyContribution.map(s => (
               <div key={s.name} className="flex items-center justify-between text-sm">

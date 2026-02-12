@@ -207,14 +207,14 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
       });
     }
 
-    // Find today's alert
-    const today = new Date().toISOString().split("T")[0];
+    // Find most recent alert (within last 24 hours to handle timezone edge cases)
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: alerts } = await supabase
       .from("scanner_alerts")
       .select("*")
       .eq("user_id", profile.id)
       .eq("ticker", ticker)
-      .eq("scan_date", today)
+      .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(1);
 
@@ -247,13 +247,13 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
       });
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: alerts } = await supabase
       .from("scanner_alerts")
       .select("*")
       .eq("user_id", profile.id)
       .eq("ticker", ticker)
-      .eq("scan_date", today)
+      .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(1);
 
@@ -312,13 +312,13 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
     if (!ticker) {
       await sendTelegramMessage(token, chatId, "Usage: /reject TICKER [reason]");
     } else {
-      const today = new Date().toISOString().split("T")[0];
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: alerts } = await supabase
         .from("scanner_alerts")
         .select("*")
         .eq("user_id", profile.id)
         .eq("ticker", ticker)
-        .eq("scan_date", today)
+        .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(1);
 
@@ -402,8 +402,7 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
         const mm = String(expDate.getMonth() + 1).padStart(2, "0");
         const dd = String(expDate.getDate()).padStart(2, "0");
         const strikePadded = String(Math.round(strike * 1000)).padStart(8, "0");
-        const paddedTicker = ticker.padEnd(6, " ");
-        const optionSymbol = `${paddedTicker}${yy}${mm}${dd}C${strikePadded}`;
+        const optionSymbol = `${ticker}${yy}${mm}${dd}C${strikePadded}`;
 
         try {
           const sellRes = await fetch(`${alpacaBaseUrl}/orders`, {
@@ -611,8 +610,7 @@ async function executeTradeAndNotify(
       const mm = String(expDate.getMonth() + 1).padStart(2, "0");
       const dd = String(expDate.getDate()).padStart(2, "0");
       const strikePadded = String(Math.round(strike * 1000)).padStart(8, "0");
-      const paddedTicker = ticker.padEnd(6, " ");
-      optionSymbol = `${paddedTicker}${yy}${mm}${dd}C${strikePadded}`;
+      optionSymbol = `${ticker}${yy}${mm}${dd}C${strikePadded}`;
     }
 
     // Determine endpoint: paper vs live

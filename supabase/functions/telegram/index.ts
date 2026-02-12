@@ -272,29 +272,53 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
     }
 
     // Otherwise, ask AI for suggested limit price
+    const accountSize = Number(profile.account_size) || 100000;
+    const positionSizePct = Number(profile.position_size_pct) || 3;
+    const maxPositionValue = accountSize * (positionSizePct / 100);
+    const askPrice = Number(alert.ask_price) || 0;
+    const contractCost = askPrice * 100;
+    const estQty = contractCost > 0 ? Math.max(1, Math.floor(maxPositionValue / contractCost)) : 1;
+    const estTotal = estQty * contractCost;
+    const estAlloc = accountSize > 0 ? Math.round((estTotal / accountSize) * 100 * 10) / 10 : 0;
+
+    // Look up strategy/playbook name
+    const { data: strat } = await supabase
+      .from("strategies")
+      .select("name")
+      .eq("user_id", profile.id)
+      .eq("scanner_type", alert.scanner_type)
+      .limit(1)
+      .maybeSingle();
+    const playbookName = strat?.name || alert.scanner_type;
+
     try {
       const aiSuggestion = await getAIPriceSuggestion(alert);
 
       await sendTelegramMessage(token, chatId,
         `🤖 *AI Price Suggestion for ${ticker}*\n\n` +
-        `Ask: $${alert.ask_price || "N/A"}\n` +
+        `📋 Playbook: *${playbookName}*\n` +
+        `Ask: $${askPrice.toFixed(2)}\n` +
         `Historical Low: $${alert.historical_low || "N/A"}\n` +
         `IV Percentile: ${alert.iv_percentile != null ? alert.iv_percentile + "%" : "N/A (delayed data)"}\n` +
-        `Scanner: ${alert.scanner_type}\n\n` +
+        `Strike: $${alert.suggested_strike} | ${alert.suggested_expiry}\n\n` +
         `💡 *Suggested Limit: $${aiSuggestion.price}*\n` +
         `_${aiSuggestion.reasoning}_\n\n` +
+        `📦 *Position Sizing*\n` +
+        `${estQty} contract${estQty > 1 ? "s" : ""} @ $${askPrice.toFixed(2)} = $${estTotal.toLocaleString()}\n` +
+        `Allocation: ${estAlloc}% of $${accountSize.toLocaleString()}\n` +
+        `_Rule: ${positionSizePct}% → max $${maxPositionValue.toLocaleString()}_\n\n` +
         `Reply:\n` +
         `/confirm ${ticker} — Execute at $${aiSuggestion.price}\n` +
         `/approve ${ticker} ${aiSuggestion.price} — Override with your price`
       );
     } catch (e) {
       console.error("AI suggestion failed:", e);
-      // Fallback: just use mid price
-      const askPrice = Number(alert.ask_price) || 0;
       const fallbackPrice = askPrice > 0 ? Math.round(askPrice * 0.98 * 100) / 100 : 0;
 
       await sendTelegramMessage(token, chatId,
         `⚠️ AI suggestion unavailable. Fallback mid-price: $${fallbackPrice}\n\n` +
+        `📋 Playbook: *${playbookName}*\n` +
+        `📦 ${estQty} contract${estQty > 1 ? "s" : ""} @ $${askPrice.toFixed(2)} = $${estTotal.toLocaleString()} (${estAlloc}%)\n\n` +
         `Reply:\n` +
         `/confirm ${ticker} — Execute at $${fallbackPrice}\n` +
         `/approve ${ticker} [your_price]`
@@ -339,17 +363,21 @@ async function handleWebhook(update: any, token: string, supabase: any): Promise
   if (text === "/status") {
     const { data: positions } = await supabase
       .from("positions")
-      .select("*")
+      .select("*, strategies(name)")
       .eq("user_id", profile.id)
       .eq("status", "open");
 
     if (!positions || positions.length === 0) {
       await sendTelegramMessage(token, chatId, "📊 No open positions.");
     } else {
-      const lines = positions.map((p: any) =>
-        `${p.ticker} $${p.strike} ${p.expiry} | P&L: ${(p.pnl_pct || 0) >= 0 ? "+" : ""}${(p.pnl_pct || 0).toFixed(1)}%`
-      );
-      await sendTelegramMessage(token, chatId, `📊 *Open Positions*\n\n${lines.join("\n")}`);
+      const totalPnl = positions.reduce((s: number, p: any) => s + (Number(p.pnl) || 0), 0);
+      const lines = positions.map((p: any) => {
+        const playbook = p.strategies?.name || "—";
+        const pnlSign = (p.pnl_pct || 0) >= 0 ? "+" : "";
+        return `*${p.ticker}* $${p.strike} ${p.expiry}\n   ${playbook} | Δ${p.delta || "?"} | P&L: ${pnlSign}${(p.pnl_pct || 0).toFixed(1)}% ($${(p.pnl || 0).toFixed(0)})`;
+      });
+      const totalSign = totalPnl >= 0 ? "+" : "";
+      await sendTelegramMessage(token, chatId, `📊 *Open Positions (${positions.length})*\n\n${lines.join("\n\n")}\n\n*Total P&L: ${totalSign}$${totalPnl.toFixed(0)}*`);
     }
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...rHeaders, "Content-Type": "application/json" },
@@ -590,6 +618,17 @@ async function executeTradeAndNotify(
   const contractCost = fillPrice * 100; // options are per 100 shares
   const suggestedQty = contractCost > 0 ? Math.max(1, Math.floor(maxPositionValue / contractCost)) : 1;
 
+  // Look up strategy/playbook
+  const { data: strat } = await supabase
+    .from("strategies")
+    .select("id, name")
+    .eq("user_id", profile.id)
+    .eq("scanner_type", alert.scanner_type)
+    .limit(1)
+    .maybeSingle();
+  const playbookName = strat?.name || alert.scanner_type;
+  const strategyId = strat?.id || null;
+
   // ─── Alpaca Order Execution ─────────────────────────────
   let alpacaOrderId: string | null = null;
   let alpacaStatus: string | null = null;
@@ -599,8 +638,7 @@ async function executeTradeAndNotify(
   const ALPACA_SECRET_KEY = Deno.env.get("ALPACA_SECRET_KEY");
 
   if (ALPACA_API_KEY && ALPACA_SECRET_KEY) {
-    // Build the OCC option symbol: TICKER + YYMMDD + C/P + strike*1000 (8 digits)
-    const expiry = alert.suggested_expiry; // e.g. "2028-01-21"
+    const expiry = alert.suggested_expiry;
     const strike = alert.suggested_strike;
 
     let optionSymbol: string | null = null;
@@ -613,7 +651,6 @@ async function executeTradeAndNotify(
       optionSymbol = `${ticker}${yy}${mm}${dd}C${strikePadded}`;
     }
 
-    // Determine endpoint: paper vs live
     const alpacaBaseUrl = mode === "live"
       ? "https://api.alpaca.markets/v2"
       : "https://paper-api.alpaca.markets/v2";
@@ -679,7 +716,7 @@ async function executeTradeAndNotify(
     pnl_pct: 0,
     allocation: Math.round((suggestedQty * contractCost / accountSize) * 100 * 10) / 10,
     status: "open",
-    strategy_id: alert.strategy_id || null,
+    strategy_id: strategyId,
   });
 
   if (posError) {
@@ -697,6 +734,7 @@ async function executeTradeAndNotify(
         mode,
         fill_price: fillPrice,
         qty: suggestedQty,
+        playbook: playbookName,
         alpaca_order_id: alpacaOrderId,
         alpaca_status: alpacaStatus,
         alpaca_error: alpacaError,
@@ -705,7 +743,6 @@ async function executeTradeAndNotify(
 
     const allocationPct = Math.round((suggestedQty * contractCost / accountSize) * 100 * 10) / 10;
 
-    // Build Alpaca status line
     let alpacaLine = "";
     if (alpacaOrderId) {
       alpacaLine = `\n🔗 Alpaca: \`${alpacaStatus}\` (${alpacaOrderId.slice(0, 8)}...)`;
@@ -715,6 +752,7 @@ async function executeTradeAndNotify(
 
     await sendTelegramMessage(token, chatId,
       `✅ *${ticker} FILLED*\n\n` +
+      `📋 Playbook: *${playbookName}*\n` +
       `Strike: $${alert.suggested_strike}\n` +
       `Expiry: ${alert.suggested_expiry}\n` +
       `Delta: ${alert.delta}\n` +

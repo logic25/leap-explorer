@@ -20,6 +20,7 @@ import {
 import { RegimeIndicator } from './RegimeIndicator';
 import { mockRegime } from '@/lib/mock-data';
 import { useAuth } from '@/hooks/useAuth';
+import PlaybookSidebar from './PlaybookSidebar';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Scanner' },
@@ -164,6 +165,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+
+      {/* Playbook Sidebar (right) */}
+      <PlaybookSidebar />
     </div>
   );
 }

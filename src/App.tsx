@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,6 +8,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { Layout } from "./components/Layout";
 import { ChatPanel } from "./components/ChatPanel";
+import OnboardingWizard from "./components/OnboardingWizard";
 import Index from "./pages/Index";
 import Portfolio from "./pages/Portfolio";
 import Backtester from "./pages/Backtester";
@@ -16,12 +18,25 @@ import WealthBuilder from "./pages/WealthBuilder";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) {
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+
+  useEffect(() => {
+    if (!user) { setCheckingOnboarding(false); return; }
+    supabase.from('strategies').select('id').eq('user_id', user.id).limit(1)
+      .then(({ data }) => {
+        if (!data || data.length === 0) setShowOnboarding(true);
+        setCheckingOnboarding(false);
+      });
+  }, [user]);
+
+  if (loading || checkingOnboarding) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -29,6 +44,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
   if (!user) return <Navigate to="/auth" replace />;
+  if (showOnboarding) return <OnboardingWizard onComplete={() => setShowOnboarding(false)} />;
   return <>{children}</>;
 }
 

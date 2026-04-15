@@ -32,8 +32,46 @@ export interface ScannerAlert {
   unusualActivity?: boolean;
   slippageEst?: number;
   chainQualityScore?: number;
+  convexityScore?: number;
   checklist: ChecklistItem[];
   timestamp: string;
+}
+
+/**
+ * Convexity Score — composite 0-100 rank for ordering LEAPs by "cheap + durable".
+ * Higher = better convexity.
+ *
+ * Inputs (normalized 0-1, then weighted):
+ *   - delta            (want 0.55-0.75; too low = OTM lottery, too high = stock proxy)
+ *   - DTE              (want ≥ 365; more time = more durability)
+ *   - IV percentile    (want ≤ 30; low IV = cheap premium vs own history)
+ *   - chain quality    (want high; proxy for OI + spread + slippage)
+ *
+ * This is a ranking tool, not a pricing model. Use it to compare candidates,
+ * not to decide whether any single contract is "fair".
+ */
+export function computeConvexityScore(a: {
+  delta: number;
+  dte: number;
+  ivPercentile: number;
+  chainQualityScore?: number;
+}): number {
+  // Delta sweet spot: peak at 0.65, fall off on either side.
+  const deltaFit = Math.max(0, 1 - Math.abs(a.delta - 0.65) / 0.35);
+  // DTE: 0 at 90d, saturates at 900d.
+  const dteFit = Math.max(0, Math.min(1, (a.dte - 90) / (900 - 90)));
+  // IV percentile: 100 → 0, 0 → 1 (lower IV = cheaper).
+  const ivFit = Math.max(0, 1 - a.ivPercentile / 100);
+  // Chain quality is already 0-100.
+  const qualityFit = (a.chainQualityScore ?? 50) / 100;
+
+  const score =
+    deltaFit * 0.30 +
+    dteFit * 0.25 +
+    ivFit * 0.25 +
+    qualityFit * 0.20;
+
+  return Math.round(score * 100);
 }
 
 export interface ChecklistItem {
@@ -95,7 +133,7 @@ const checklist = (type: ScannerType): ChecklistItem[] => [
   { label: 'Thesis Understood', passed: false, category: 'portfolio' },
 ];
 
-export const mockAlerts: ScannerAlert[] = [
+const rawMockAlerts: ScannerAlert[] = [
   {
     id: '1', ticker: 'NVDA', name: 'NVIDIA Corp', scannerType: 'Value Zone',
     price: 142.50, change: 3.20, changePct: 2.3, ma50: 138.00, ma200: 130.50,
@@ -127,6 +165,11 @@ export const mockAlerts: ScannerAlert[] = [
     checklist: checklist('Fallen Angel'), timestamp: new Date().toISOString(),
   },
 ];
+
+export const mockAlerts: ScannerAlert[] = rawMockAlerts.map((a) => ({
+  ...a,
+  convexityScore: computeConvexityScore(a),
+}));
 
 export const mockPositions: Position[] = [
   {

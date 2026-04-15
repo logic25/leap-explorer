@@ -16,6 +16,7 @@ import {
   LogOut,
   Sun,
   Moon,
+  Calculator,
 } from 'lucide-react';
 import { RegimeIndicator } from './RegimeIndicator';
 import { mockRegime } from '@/lib/mock-data';
@@ -26,6 +27,7 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Scanner' },
   { to: '/portfolio', icon: Briefcase, label: 'Portfolio' },
   { to: '/wealth-builder', icon: Target, label: 'Wealth Builder' },
+  { to: '/sizer', icon: Calculator, label: 'Sizer' },
   { to: '/backtester', icon: BarChart3, label: 'Backtester' },
   { to: '/audit', icon: ScrollText, label: 'Audit Log' },
   { to: '/settings', icon: Settings, label: 'Settings' },

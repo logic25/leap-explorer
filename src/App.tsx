@@ -15,6 +15,7 @@ import Backtester from "./pages/Backtester";
 import Settings from "./pages/Settings";
 import AuditLog from "./pages/AuditLog";
 import WealthBuilder from "./pages/WealthBuilder";
+import Sizer from "./pages/Sizer";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
@@ -60,6 +61,7 @@ const AppRoutes = () => (
               <Route path="/" element={<Index />} />
               <Route path="/portfolio" element={<Portfolio />} />
               <Route path="/wealth-builder" element={<WealthBuilder />} />
+              <Route path="/sizer" element={<Sizer />} />
               <Route path="/backtester" element={<Backtester />} />
               <Route path="/audit" element={<AuditLog />} />
               <Route path="/settings" element={<Settings />} />

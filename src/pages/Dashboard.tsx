@@ -2,17 +2,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import type { ScannerType } from '@/lib/mock-data';
-import { mockAlerts, mockRegime } from '@/lib/mock-data';
+import { mockAlerts, mockRegime, computeConvexityScore } from '@/lib/mock-data';
 import type { ScannerAlert } from '@/lib/mock-data';
 import { ScannerBadge } from '@/components/ScannerBadge';
 import { ChecklistModal } from '@/components/ChecklistModal';
 import { RegimeIndicator } from '@/components/RegimeIndicator';
-import { Check, X, ChevronRight, Clock, RefreshCw, Loader2, Settings2, GripVertical, Eye, EyeOff } from 'lucide-react';
+import { Check, X, ChevronRight, Clock, RefreshCw, Loader2, Settings2, GripVertical, Eye, EyeOff, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 
-type ColumnKey = 'ticker' | 'type' | 'price' | 'change' | 'rsi' | 'volRatio' | 'strike' | 'expiry' | 'delta' | 'theta' | 'vega' | 'dte' | 'oi' | 'spread' | 'ivPct' | 'ivHvRatio' | 'askPrice' | 'volOiRatio' | 'chainQuality' | 'checklist';
+type ColumnKey = 'ticker' | 'type' | 'price' | 'change' | 'rsi' | 'volRatio' | 'strike' | 'expiry' | 'delta' | 'theta' | 'vega' | 'dte' | 'oi' | 'spread' | 'ivPct' | 'ivHvRatio' | 'askPrice' | 'volOiRatio' | 'chainQuality' | 'convexity' | 'checklist';
 
 interface ColumnDef {
   key: ColumnKey;
@@ -71,11 +71,25 @@ const ALL_COLUMNS: ColumnDef[] = [
     const color = score >= 80 ? 'text-bullish' : score >= 50 ? 'text-warning' : 'text-bearish';
     return <span className={`font-mono font-semibold ${color}`}>{score}</span>;
   }},
+  { key: 'convexity', label: 'Convex', align: 'center', render: (a) => {
+    const score = a.convexityScore ?? 0;
+    const color = score >= 70 ? 'text-bullish' : score >= 40 ? 'text-warning' : 'text-bearish';
+    return <span className={`font-mono font-semibold ${color}`}>{score}</span>;
+  }},
   { key: 'checklist', label: 'Checklist', align: 'center', render: () => null },
 ];
 
-const DEFAULT_VISIBLE: ColumnKey[] = ['ticker', 'type', 'price', 'change', 'oi', 'spread', 'ivPct', 'ivHvRatio', 'delta', 'chainQuality', 'checklist'];
+const DEFAULT_VISIBLE: ColumnKey[] = ['ticker', 'type', 'price', 'change', 'oi', 'spread', 'ivPct', 'ivHvRatio', 'delta', 'chainQuality', 'convexity', 'checklist'];
+const LEAP_VIEW_COLUMNS: ColumnKey[] = ['ticker', 'price', 'rsi', 'delta', 'dte', 'ivPct', 'askPrice', 'oi', 'spread', 'chainQuality', 'convexity', 'checklist'];
 const STORAGE_KEY = 'scanner-columns';
+const LEAP_VIEW_KEY = 'scanner-leap-view';
+
+// LEAP filter thresholds — "cheap durable convexity".
+const LEAP_FILTER = {
+  minDelta: 0.65,   // real ITM exposure
+  minDte: 365,      // at least a year of runway
+  maxIvPct: 30,     // cheap vs own IV history
+};
 
 function loadColumnPrefs(): ColumnKey[] {
   try {
@@ -94,6 +108,21 @@ export default function Dashboard() {
   const [scanning, setScanning] = useState(false);
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [visibleCols, setVisibleCols] = useState<ColumnKey[]>(loadColumnPrefs);
+  const [leapView, setLeapView] = useState<boolean>(() => {
+    try { return localStorage.getItem(LEAP_VIEW_KEY) === '1'; } catch { return false; }
+  });
+
+  const toggleLeapView = () => {
+    setLeapView(prev => {
+      const next = !prev;
+      try { localStorage.setItem(LEAP_VIEW_KEY, next ? '1' : '0'); } catch {}
+      if (next) {
+        setVisibleCols(LEAP_VIEW_COLUMNS);
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(LEAP_VIEW_COLUMNS)); } catch {}
+      }
+      return next;
+    });
+  };
 
   const toggleColumn = (key: ColumnKey) => {
     setVisibleCols(prev => {
@@ -170,6 +199,12 @@ export default function Dashboard() {
         unusualActivity: (row as any).unusual_activity || false,
         slippageEst: Number((row as any).slippage_est) || undefined,
         chainQualityScore: Number((row as any).chain_quality_score) || undefined,
+        convexityScore: computeConvexityScore({
+          delta: Number(row.delta) || 0,
+          dte: row.dte || 0,
+          ivPercentile: Number(row.iv_percentile) || 0,
+          chainQualityScore: Number((row as any).chain_quality_score) || undefined,
+        }),
         checklist: Array.isArray(row.checklist)
           ? (row.checklist as any[]).map((c: any) => ({ label: c.label, passed: c.passed, category: c.category }))
           : [],
@@ -206,8 +241,18 @@ export default function Dashboard() {
     setScanning(false);
   };
 
-  const displayAlerts = alerts.length > 0 ? alerts : (loading ? [] : mockAlerts);
+  const baseAlerts = alerts.length > 0 ? alerts : (loading ? [] : mockAlerts);
   const usingMock = alerts.length === 0 && !loading;
+
+  const displayAlerts = leapView
+    ? [...baseAlerts]
+        .filter(a =>
+          a.delta >= LEAP_FILTER.minDelta &&
+          a.dte >= LEAP_FILTER.minDte &&
+          a.ivPercentile <= LEAP_FILTER.maxIvPct
+        )
+        .sort((a, b) => (b.convexityScore ?? 0) - (a.convexityScore ?? 0))
+    : baseAlerts;
 
   const passedCount = (alert: ScannerAlert) => alert.checklist.filter(c => c.passed).length;
   const totalCount = (alert: ScannerAlert) => alert.checklist.length;
@@ -233,6 +278,16 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant={leapView ? 'default' : 'outline'}
+            size="sm"
+            onClick={toggleLeapView}
+            className="gap-2"
+            title={`LEAP View: delta ≥ ${LEAP_FILTER.minDelta}, DTE ≥ ${LEAP_FILTER.minDte}, IV %ile ≤ ${LEAP_FILTER.maxIvPct}, sorted by convexity`}
+          >
+            <Zap className="h-4 w-4" />
+            LEAP View{leapView ? ' ·  ON' : ''}
+          </Button>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
@@ -317,7 +372,9 @@ export default function Dashboard() {
                 {displayAlerts.length === 0 ? (
                   <tr>
                     <td colSpan={activeColumns.length + 1} className="px-4 py-8 text-center text-muted-foreground">
-                      No alerts today. Click "Run Scan Now" to scan your watchlist.
+                      {leapView && baseAlerts.length > 0
+                        ? `No alerts pass LEAP View filters (delta ≥ ${LEAP_FILTER.minDelta}, DTE ≥ ${LEAP_FILTER.minDte}, IV %ile ≤ ${LEAP_FILTER.maxIvPct}). Turn off LEAP View to see all ${baseAlerts.length}.`
+                        : 'No alerts today. Click "Run Scan Now" to scan your watchlist.'}
                     </td>
                   </tr>
                 ) : (

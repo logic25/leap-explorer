@@ -59,6 +59,7 @@ const AppRoutes = () => (
           <Layout>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/index" element={<Navigate to="/" replace />} />
               <Route path="/portfolio" element={<Portfolio />} />
               <Route path="/wealth-builder" element={<WealthBuilder />} />
               <Route path="/sizer" element={<Sizer />} />
